@@ -192,9 +192,9 @@ def main(model_name,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", type=str, required=True)
-    parser.add_argument("--pairwise_path", type=str)
-    parser.add_argument("--submissions_path", type=str)
-    parser.add_argument("--metadata_path", type=str)
+    parser.add_argument("--pairwise_path", type=str, default="./data/pairwise_test.jsonl")
+    parser.add_argument("--submissions_path", type=str, default="./data/submissions.jsonl")
+    parser.add_argument("--metadata_path", type=str, default="./data/metadata.jsonl")
     parser.add_argument("--use_bnb", action="store_true")
     parser.add_argument("--limit", type=int)
 
