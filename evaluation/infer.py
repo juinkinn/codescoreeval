@@ -28,9 +28,14 @@ Code B ({lang2}):
 
 Which code is better?
 
-Final answer (A or B only):
+Final answer must be EXACTLY one of:
+A (Code A is better)
+B (Code B is better)
+SAME (Both codes are equally good)
 """
 
+
+# ===== truncate =====
 def smart_truncate(code, max_chars=10000):
     if not code:
         return code
@@ -39,27 +44,20 @@ def smart_truncate(code, max_chars=10000):
         return code
 
     half = max_chars // 2
-    head = code[:half]
-    tail = code[-half:]
-
-    return head + "\n...\n" + tail
+    return code[:half] + "\n...\n" + code[-half:]
 
 
-def build_prompt(sample, metadata_map):
-    description = metadata_map.get(sample["id"], "")
-
-    code1 = smart_truncate(sample["code1"])
-    code2 = smart_truncate(sample["code2"])
-    return PAIRWISE_PROMPT.format(
-        criterion=sample["criteria"],
-        description=description,
-        code1=code1,
-        code2=code2,
-        lang1=sample.get("lang1", ""),
-        lang2=sample.get("lang2", "")
-    )
+# ===== load submissions map =====
+def load_submissions(path):
+    sub_map = {}
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            j = json.loads(line)
+            sub_map[j["sub_id"]] = j
+    return sub_map
 
 
+# ===== load metadata =====
 def load_metadata(path):
     meta = {}
     with open(path, "r", encoding="utf-8") as f:
@@ -68,26 +66,55 @@ def load_metadata(path):
             meta[j["id"]] = j.get("description", "")
     return meta
 
+
+# ===== build prompt =====
+def build_prompt(sample, sub_map, metadata_map):
+    sub1 = sub_map[sample["sub_id_1"]]
+    sub2 = sub_map[sample["sub_id_2"]]
+
+    base_id = sample["sub_id_1"].rsplit("_", 1)[0]
+    description = metadata_map.get(base_id, "")
+
+    code1 = smart_truncate(sub1.get("code", ""))
+    code2 = smart_truncate(sub2.get("code", ""))
+
+    return PAIRWISE_PROMPT.format(
+        criterion=sample["criteria"],
+        description=description,
+        code1=code1,
+        code2=code2,
+        lang1=sub1.get("lang", ""),
+        lang2=sub2.get("lang", "")
+    )
+
+
+# ===== extract prediction =====
 def extract_choice(text: str):
     if not text:
         return None
 
     text = text.strip().upper()
 
-    # Ưu tiên match đầu
+    # ưu tiên đầu
     if text.startswith("A"):
         return 1
     if text.startswith("B"):
         return 2
+    if text.startswith("SAME"):
+        return 0
 
-    # Regex fallback
-    match = re.search(r"\b(A|B)\b", text)
-    if match:
-        return 1 if match.group(1) == "A" else 2
+    # regex fallback
+    if re.search(r"\bSAME\b", text):
+        return 0
+    if re.search(r"\bA\b", text):
+        return 1
+    if re.search(r"\bB\b", text):
+        return 2
 
     return None
 
 
+# ===== infer =====
 def infer(model, tokenizer, prompt):
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
@@ -96,7 +123,7 @@ def infer(model, tokenizer, prompt):
             **inputs,
             do_sample=True,
             temperature=0.2,
-            max_new_tokens=5,  
+            max_new_tokens=5,
             eos_token_id=tokenizer.eos_token_id
         )
 
@@ -106,13 +133,17 @@ def infer(model, tokenizer, prompt):
     )
 
     pred = extract_choice(output)
+
     del inputs, output_ids
     torch.cuda.empty_cache()
+
     return pred
 
 
+# ===== main =====
 def main(model_name,
          pairwise_path="./data/pairwise_test.jsonl",
+         submissions_path="./data/submissions.jsonl",
          metadata_path="./data/metadata.jsonl",
          use_bnb=False,
          limit=None):
@@ -120,14 +151,16 @@ def main(model_name,
     tokenizer = load_tokenizer(model_name)
     model = load_model(model_name, use_bnb=use_bnb, device_map="cuda")
 
+    sub_map = load_submissions(submissions_path)
     metadata_map = load_metadata(metadata_path)
 
     os.makedirs("output", exist_ok=True)
     output_file = os.path.join(
         "output", f"{model_name.replace('/', '_')}_pairwise.jsonl"
     )
-    
+
     total = sum(1 for _ in open(pairwise_path, "r", encoding="utf-8"))
+
     with open(pairwise_path, "r", encoding="utf-8") as f_in, \
          open(output_file, "w", encoding="utf-8") as f_out:
 
@@ -137,27 +170,31 @@ def main(model_name,
 
             sample = json.loads(line)
 
-            prompt = build_prompt(sample, metadata_map)
+            prompt = build_prompt(sample, sub_map, metadata_map)
             pred = infer(model, tokenizer, prompt)
 
             out = {
                 "id": sample["id"],
                 "criteria": sample["criteria"],
-                "label": sample["label"],  
-                "prediction": pred          
+                "sub_id_1": sample["sub_id_1"],
+                "sub_id_2": sample["sub_id_2"],
+                "label": sample["label"],   # 1 / 2 / 0
+                "prediction": pred
             }
 
             f_out.write(json.dumps(out, ensure_ascii=False) + "\n")
+            f_out.flush()
 
     print(f"Inference done! Saved to {output_file}")
 
 
-# ================= ENTRY =================
+# ===== entry =====
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", type=str, required=True)
-    parser.add_argument("--pairwise_path", type=str, default="./data/pairwise_test.jsonl")
-    parser.add_argument("--metadata_path", type=str, default="./data/metadata.jsonl")
+    parser.add_argument("--pairwise_path", type=str, required=True)
+    parser.add_argument("--submissions_path", type=str, required=True)
+    parser.add_argument("--metadata_path", type=str, required=True)
     parser.add_argument("--use_bnb", action="store_true")
     parser.add_argument("--limit", type=int)
 
@@ -166,6 +203,7 @@ if __name__ == "__main__":
     main(
         model_name=args.model_name,
         pairwise_path=args.pairwise_path,
+        submissions_path=args.submissions_path,
         metadata_path=args.metadata_path,
         use_bnb=args.use_bnb,
         limit=args.limit
