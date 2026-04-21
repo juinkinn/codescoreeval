@@ -29,9 +29,9 @@ Code B ({lang2}):
 Which code is better?
 
 Choose A or B unless they are strictly equivalent with respect to the criterion. 
-Choose "both" only if there is no meaningful difference.
+Choose "Both" only if there is no meaningful difference.
 
-Final answer (A, B, or both only):
+Final answer (A, B, or Both only):
 """
 
 
@@ -96,7 +96,7 @@ def extract_choice(text: str):
     text = text.strip().upper()
 
     # ưu tiên đầu
-    if text.startswith("both"):
+    if text.startswith("Both"):
         return 0
     if text.startswith("A"):
         return 1
