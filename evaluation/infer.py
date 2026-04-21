@@ -131,9 +131,9 @@ def infer(model, tokenizer, prompt):
         output_ids[0][inputs['input_ids'].shape[1]:],
         skip_special_tokens=True
     )
-
+    print(output)
     pred = extract_choice(output)
-
+    print(pred)
     del inputs, output_ids
     torch.cuda.empty_cache()
 
