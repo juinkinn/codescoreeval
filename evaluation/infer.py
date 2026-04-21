@@ -28,10 +28,7 @@ Code B ({lang2}):
 
 Which code is better?
 
-Final answer must be EXACTLY one of:
-A (Code A is better)
-B (Code B is better)
-SAME (Both codes are equally good)
+Final answer (A, B, or both only):
 """
 
 
@@ -100,11 +97,11 @@ def extract_choice(text: str):
         return 1
     if text.startswith("B"):
         return 2
-    if text.startswith("SAME"):
+    if text.startswith("both"):
         return 0
 
     # regex fallback
-    if re.search(r"\bSAME\b", text):
+    if re.search(r"\bboth\b", text):
         return 0
     if re.search(r"\bA\b", text):
         return 1
