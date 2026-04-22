@@ -95,16 +95,13 @@ def extract_choice(text: str):
 
     text = text.strip().upper()
 
-    # ưu tiên đầu
-    if text.startswith("Both"):
+    if text.startswith("BOTH"):
         return 0
     if text.startswith("A"):
         return 1
     if text.startswith("B"):
         return 2
-    
-    # regex fallback
-    if re.search(r"\bboth\b", text):
+    if re.search(r"\bBOTH\b", text):
         return 0
     if re.search(r"\bA\b", text):
         return 1
