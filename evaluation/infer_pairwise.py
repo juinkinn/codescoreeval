@@ -6,33 +6,7 @@ import argparse
 import re
 
 from loader import load_tokenizer, load_model
-
-
-PAIRWISE_PROMPT = """\
-You are a Senior Code Reviewer.
-
-Compare TWO code submissions based ONLY on the given criterion.
-
-Criterion: {criterion}
-
-DO NOT consider any other aspects.
-
-Problem Description:
-{description}
-
-Code A ({lang1}):
-{code1}
-
-Code B ({lang2}):
-{code2}
-
-Which code is better?
-
-Choose A or B unless they are strictly equivalent with respect to the criterion. 
-Choose "Both" only if there is no meaningful difference.
-
-Final answer (A, B, or Both only):
-"""
+from prompts import CORRECTNESS_PAIRWISE, EFFICIENCY_PAIRWISE, READABILITY_PAIRWISE
 
 
 # ===== truncate =====
@@ -78,8 +52,18 @@ def build_prompt(sample, sub_map, metadata_map):
     code1 = smart_truncate(sub1.get("code", ""))
     code2 = smart_truncate(sub2.get("code", ""))
 
-    return PAIRWISE_PROMPT.format(
-        criterion=sample["criteria"],
+    # Select prompt template based on criterion
+    criterion = sample["criteria"]
+    if criterion == "correctness":
+        prompt_template = CORRECTNESS_PAIRWISE
+    elif criterion == "efficiency":
+        prompt_template = EFFICIENCY_PAIRWISE
+    elif criterion == "readability":
+        prompt_template = READABILITY_PAIRWISE
+    else:
+        prompt_template = READABILITY_PAIRWISE  # Default fallback
+
+    return prompt_template.format(
         description=description,
         code1=code1,
         code2=code2,
