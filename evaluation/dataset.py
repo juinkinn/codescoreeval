@@ -7,6 +7,15 @@ class SubmissionDataset:
                  limit=None): 
         self.submissions = []
         self.metadata_map = {}
+        self.code_map = {}
+
+        # Load code map
+        code_path = "./data/submissions.jsonl"
+        if os.path.exists(code_path):
+            with open(code_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    item = json.loads(line)
+                    self.code_map[item['sub_id']] = item
 
         # Load metadata
         if os.path.exists(metadata_path):
@@ -48,6 +57,20 @@ class SubmissionDataset:
                     sub['title'] = meta.get('title', '')
                     sub['constraints'] = meta.get('constraints', '')
                     sub['input_format'] = meta.get('input_format', '')
+
+                    # ===== add code and lang =====
+                    code_info = self.code_map.get(sub_id, {})
+                    sub['code'] = code_info.get('code', '')
+                    sub['lang'] = code_info.get('lang', '')
+                    sub['correct'] = code_info.get('correct', None)
+
+                    # ===== normalize gt scores =====
+                    if 'correctness_score' in sub:
+                        sub['gt_correctness_score'] = sub['correctness_score']
+                    if 'efficiency_score' in sub:
+                        sub['gt_efficiency_score'] = sub['efficiency_score']
+                    if 'readability_score' in sub:
+                        sub['gt_readability_score'] = sub['readability_score']
                     sub['output_format'] = meta.get('output_format', '')
 
                     self.submissions.append(sub)
