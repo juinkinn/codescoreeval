@@ -105,7 +105,7 @@ def infer(model, tokenizer, prompt):
             **inputs,
             do_sample=True,
             temperature=0.2,
-            max_new_tokens=5,
+            max_new_tokens=64,
             eos_token_id=tokenizer.eos_token_id
         )
 
