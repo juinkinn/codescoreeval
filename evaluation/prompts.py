@@ -137,10 +137,10 @@ Problem Description:
 {description}
 
 Code A ({lang1}):
-{code1}
+{code2}
 
 Code B ({lang2}):
-{code2}
+{code1}
 
 Which code is better?
 
