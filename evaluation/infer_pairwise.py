@@ -80,17 +80,17 @@ def extract_choice(text: str):
     text = text.strip().upper()
 
     if text.startswith("BOTH"):
-        return 0
+        return 0.5
     if text.startswith("A"):
         return 1
     if text.startswith("B"):
-        return 2
-    if re.search(r"\bBOTH\b", text):
         return 0
+    if re.search(r"\bBOTH\b", text):
+        return 0.5
     if re.search(r"\bA\b", text):
         return 1
     if re.search(r"\bB\b", text):
-        return 2
+        return 0
 
     return None
 
