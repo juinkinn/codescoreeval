@@ -1,8 +1,8 @@
 import torch
 import json
 import os
-from dataset import SubmissionDataset
-from loader import load_tokenizer, load_model
+from evaluation.inference.dataset import SubmissionDataset
+from evaluation.inference.loader import load_tokenizer, load_model
 from prompts import CORRECTNESS_PROMPT, EFFICIENCY_PROMPT, SYNTAX_PROMPT
 from tqdm import tqdm
 import re

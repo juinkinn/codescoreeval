@@ -1,29 +1,18 @@
-import json
 import os
 import argparse
 from collections import defaultdict
-from scipy.stats import spearmanr, kendalltau
-from sklearn.metrics import cohen_kappa_score
-
-
-def load_jsonl(path):
-    data = []
-    with open(path, "r", encoding="utf-8") as f:
-        for line in f:
-            data.append(json.loads(line))
-    return data
+from utils import (
+    load_jsonl,
+    map_score,
+    build_gt_scores,
+    pairwise_consistency,
+    pairwise_consistency_conf,
+    evaluate_ranking,
+)
 
 
 def build_scores_raw(pairwise_data):
     scores = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))
-
-    def map_score(pred):
-        if pred == 1:
-            return 1
-        elif pred == 0:
-            return 0
-        else:
-            return 0.5
 
     for row in pairwise_data:
         base_id = row["id"]
@@ -45,14 +34,6 @@ def build_scores_conf(pairwise_data, swapped_data):
 
     soft_bias_sum = 0
     total = 0
-
-    def map_score(pred):
-        if pred == 1:
-            return 1
-        elif pred == 0:
-            return 0
-        else:
-            return 0.5
 
     for row1, row2 in zip(pairwise_data, swapped_data):
         base_id = row1["id"]
@@ -216,6 +197,15 @@ def evaluate(preds, gt_scores):
     return results
 
 
+def build_predictions(scores):
+    preds = defaultdict(dict)
+    for base_id in scores:
+        for c in scores[base_id]:
+            for sub_id, sc in scores[base_id][c].items():
+                preds[sub_id][c] = sc
+    return preds
+
+
 def print_results(title, results):
     print(f"\n=== {title} ===")
     for c, res in results.items():
@@ -238,7 +228,7 @@ def run_model(pairwise_path, swapped_path, test_data, mode):
     if mode in ["raw", "both"]:
         scores_raw = build_scores_raw(pairwise_data)
         preds_raw = build_predictions(scores_raw)
-        results_raw = evaluate(preds_raw, gt_scores)
+        results_raw = evaluate_ranking(preds_raw, gt_scores)
 
         print_results("RAW (NO SWAP)", results_raw)
 
@@ -251,7 +241,7 @@ def run_model(pairwise_path, swapped_path, test_data, mode):
 
         scores_conf, bias_conf = build_scores_conf(pairwise_data, swapped_data)
         preds_conf = build_predictions(scores_conf)
-        results_conf = evaluate(preds_conf, gt_scores)
+        results_conf = evaluate_ranking(preds_conf, gt_scores)
 
         cons_conf = pairwise_consistency_conf(pairwise_data, swapped_data, gt_scores)
 
@@ -260,11 +250,6 @@ def run_model(pairwise_path, swapped_path, test_data, mode):
 
         print(f"\nConsistency CONF: {cons_conf:.4f}")
         print(f"Bias CONF: {bias_conf:.4f}")
-
-        # DELTA
-        print("\n--- DELTA (CONF - RAW) ---")
-        print(f"Δ Consistency: {cons_conf - cons_raw:.4f}")
-        print(f"Δ Bias: {-bias_conf:.4f} (↓ is better)")
 
     else:
         print("Missing swapped file → skip CONF")

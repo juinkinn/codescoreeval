@@ -5,7 +5,7 @@ from tqdm import tqdm
 import argparse
 import re
 
-from loader import load_tokenizer, load_model
+from evaluation.inference.loader import load_tokenizer, load_model
 from prompts import CORRECTNESS_PAIRWISE, EFFICIENCY_PAIRWISE, READABILITY_PAIRWISE
 
 
