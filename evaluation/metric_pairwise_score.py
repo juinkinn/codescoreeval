@@ -3,14 +3,19 @@ import os
 import argparse
 from collections import defaultdict
 
-from scipy.stats import spearmanr
-from sklearn.metrics import cohen_kappa_score
+from sklearn.metrics import mean_squared_error, cohen_kappa_score
 
 from utils import (
     load_jsonl,
     map_score,
     build_gt_scores,
 )
+
+CRITERIA = [
+    "correctness",
+    "efficiency",
+    "readability"
+]
 
 
 def build_anchor_map(anchor_data):
@@ -24,12 +29,18 @@ def build_anchor_map(anchor_data):
 
     return anchor_map
 
-def build_relations(pairwise_data, swapped_data):
-    """
-    relations[(a,b)]:
-        cumulative support that a > b
-    """
 
+def collect_anchor_sub_ids(anchor_data):
+    anchor_ids = set()
+
+    for row in anchor_data:
+        for _, sub_id in row["anchors"].items():
+            anchor_ids.add(sub_id)
+
+    return anchor_ids
+
+
+def build_relations(pairwise_data, swapped_data):
     relations = defaultdict(float)
 
     # original
@@ -40,7 +51,7 @@ def build_relations(pairwise_data, swapped_data):
         relations[(a, b)] += p
         relations[(b, a)] += (1 - p)
 
-    # swapped (debias)
+    # swapped
     for r in swapped_data:
         a, b = r["sub_id_1"], r["sub_id_2"]
         p = map_score(r["prediction"])
@@ -54,6 +65,32 @@ def build_relations(pairwise_data, swapped_data):
 def compare(a, b, relations):
     return relations[(a, b)] - relations[(b, a)]
 
+
+def apply_soft_monotonic(rel, scores):
+    """
+    Enforce soft monotonic constraint:
+    rel[1] >= rel[2] >= ... >= rel[5]
+
+    Instead of hard overwrite,
+    average conflicting neighbors.
+    """
+
+    fixed = rel.copy()
+
+    for i in range(len(scores) - 1):
+        low = scores[i]
+        high = scores[i + 1]
+
+        # contradiction
+        if fixed[low] < fixed[high]:
+
+            avg = (fixed[low] + fixed[high]) / 2
+
+            fixed[low] = avg
+            fixed[high] = avg
+
+    return fixed
+
 def infer_score(sub_id, anchors, relations):
     scores = sorted(anchors.keys())
 
@@ -62,12 +99,18 @@ def infer_score(sub_id, anchors, relations):
         for s in scores
     }
 
+    # apply soft monotonic smoothing
+    rel = apply_soft_monotonic(rel, scores)
+
+    # above highest anchor
     if rel[scores[-1]] >= 0:
         return scores[-1]
 
+    # below lowest anchor
     if rel[scores[0]] < 0:
         return scores[0]
 
+    # find interval
     for i in range(len(scores) - 1):
         low, high = scores[i], scores[i + 1]
 
@@ -107,14 +150,18 @@ def build_predictions(pairwise_data, swapped_data, anchor_map):
 
     return preds
 
-def evaluate(preds, test_data):
+def evaluate(preds, test_data, anchor_ids):
     results = {}
 
-    for c in ["correctness", "efficiency", "readability"]:
+    for c in CRITERIA:
         y_true, y_pred = [], []
 
         for r in test_data:
             sub = r["sub_id"]
+
+            # exclude anchors
+            if sub in anchor_ids:
+                continue
 
             if sub not in preds or c not in preds[sub]:
                 continue
@@ -125,9 +172,17 @@ def evaluate(preds, test_data):
         if not y_true:
             continue
 
+        mse = mean_squared_error(y_true, y_pred)
+
+        kappa = cohen_kappa_score(
+            y_true,
+            y_pred,
+            weights="quadratic"
+        )
+
         results[c] = {
-            "spearman": spearmanr(y_true, y_pred)[0],
-            "kappa": cohen_kappa_score(y_true, y_pred, weights="quadratic"),
+            "mse": mse,
+            "kappa": kappa,
             "n": len(y_true)
         }
 
@@ -142,7 +197,7 @@ def run_model(pairwise_path, swapped_path, anchor_path, test_data, mode):
     anchor_data = load_jsonl(anchor_path)
 
     anchor_map = build_anchor_map(anchor_data)
-    gt = build_gt_scores(test_data)
+    anchor_ids = collect_anchor_sub_ids(anchor_data)
 
     preds = build_predictions(
         pairwise_data,
@@ -151,14 +206,19 @@ def run_model(pairwise_path, swapped_path, anchor_path, test_data, mode):
     )
 
     if mode in ["raw", "both"]:
-        res = evaluate(preds, test_data)
+        res = evaluate(preds, test_data, anchor_ids)
+
+        print("{:<15} {:<15} {:<15} {:<10}".format(
+            "Criterion", "Kappa", "MSE", "N"
+        ))
+        print("-" * 60)
 
         for k, v in res.items():
             print(
-                f"\n[{k}] "
-                f"Spearman={v['spearman']:.4f} "
-                f"Kappa={v['kappa']:.4f} "
-                f"n={v['n']}"
+                f"{k:<15} "
+                f"{v['kappa']:<15.4f} "
+                f"{v['mse']:<15.4f} "
+                f"{v['n']:<10}"
             )
 
 def main(pairwise_dir, anchor_path, test_path, mode):
