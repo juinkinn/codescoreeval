@@ -117,8 +117,7 @@ Which code is better?
 Choose A or B unless they are strictly equivalent with respect to the criterion. 
 Choose "Both" only if there is no meaningful difference.
 
-Final answer (A, B, or Both only):
-"""
+Final answer (A, B, or Both only): """
 
 CORRECTNESS_PAIRWISE = """\
 You are a Senior Code Reviewer comparing correctness of TWO code submissions.
@@ -147,8 +146,7 @@ Which code is better?
 Choose A or B unless they are strictly equivalent with respect to the criterion. 
 Choose "Both" only if there is no meaningful difference.
 
-Final answer (A, B, or Both only):
-"""
+Final answer (A, B, or Both only): """
 
 EFFICIENCY_PAIRWISE = """\
 You are a Senior Code Reviewer comparing the Time and Space Complexity of TWO code submissions from an algorithmic optimization perspective.
@@ -185,5 +183,4 @@ Which code is better?
 Choose A or B unless they are strictly equivalent with respect to the criterion. 
 Choose "Both" only if there is no meaningful difference.
 
-Final answer (A, B, or Both only):
-"""
+Final answer (A, B, or Both only): """
