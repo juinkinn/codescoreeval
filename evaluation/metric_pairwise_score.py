@@ -1,14 +1,15 @@
-import json
 import os
 import argparse
 from collections import defaultdict
 
-from sklearn.metrics import mean_squared_error, cohen_kappa_score
+from sklearn.metrics import (
+    mean_squared_error,
+    cohen_kappa_score
+)
 
 from utils import (
     load_jsonl,
     map_score,
-    build_gt_scores,
 )
 
 CRITERIA = [
@@ -22,7 +23,10 @@ def build_anchor_map(anchor_data):
     anchor_map = defaultdict(dict)
 
     for row in anchor_data:
-        key = (row["id"], row["criteria"])
+        key = (
+            row["id"],
+            row["criteria"]
+        )
 
         for score, sub_id in row["anchors"].items():
             anchor_map[key][int(score)] = sub_id
@@ -40,12 +44,21 @@ def collect_anchor_sub_ids(anchor_data):
     return anchor_ids
 
 
-def build_relations(pairwise_data, swapped_data):
+def build_relations(
+    pairwise_data,
+    swapped_data
+):
+    """
+    relations[(a,b)]:
+        support that a > b
+    """
+
     relations = defaultdict(float)
 
     # original
     for r in pairwise_data:
-        a, b = r["sub_id_1"], r["sub_id_2"]
+        a = r["sub_id_1"]
+        b = r["sub_id_2"]
         p = map_score(r["prediction"])
 
         relations[(a, b)] += p
@@ -53,7 +66,8 @@ def build_relations(pairwise_data, swapped_data):
 
     # swapped
     for r in swapped_data:
-        a, b = r["sub_id_1"], r["sub_id_2"]
+        a = r["sub_id_1"]
+        b = r["sub_id_2"]
         p = map_score(r["prediction"])
 
         relations[(a, b)] += (1 - p)
@@ -62,75 +76,109 @@ def build_relations(pairwise_data, swapped_data):
     return relations
 
 
-def compare(a, b, relations):
-    return relations[(a, b)] - relations[(b, a)]
-
-
-def apply_soft_monotonic(rel, scores):
+def build_global_ranking(relations):
     """
-    Enforce soft monotonic constraint:
-    rel[1] >= rel[2] >= ... >= rel[5]
+    Build ranking score from graph.
 
-    Instead of hard overwrite,
-    average conflicting neighbors.
+    node_score:
+        overall strength of sample
     """
 
-    fixed = rel.copy()
+    node_score = defaultdict(float)
 
+    for (a, b), score in relations.items():
+        reverse = relations[(b, a)]
+        margin = score - reverse
+        node_score[a] += margin
+
+    return node_score
+
+def calibrate_with_anchors(
+    sub_id,
+    anchors,
+    node_score
+):
+    """
+    Convert ranking score
+    -> absolute score using anchors.
+    """
+    scores = sorted(anchors.keys())
+
+    sample_rank = node_score[sub_id]
+    anchor_ranks = {}
+    for s in scores:
+        anchor_id = anchors[s]
+
+        anchor_ranks[s] = node_score[anchor_id]
+
+    # above highest anchor
+    if sample_rank >= anchor_ranks[scores[-1]]:
+        return scores[-1]
+
+    # below lowest anchor
+    if sample_rank <= anchor_ranks[scores[0]]:
+        return scores[0]
+
+    # interval localization
     for i in range(len(scores) - 1):
         low = scores[i]
         high = scores[i + 1]
 
-        # contradiction
-        if fixed[low] < fixed[high]:
+        low_rank = anchor_ranks[low]
+        high_rank = anchor_ranks[high]
 
-            avg = (fixed[low] + fixed[high]) / 2
+        if (
+            low_rank <= sample_rank
+            <= high_rank
+        ):
 
-            fixed[low] = avg
-            fixed[high] = avg
+            dist_low = abs(
+                sample_rank - low_rank
+            )
 
-    return fixed
+            dist_high = abs(
+                sample_rank - high_rank
+            )
 
-def infer_score(sub_id, anchors, relations):
-    scores = sorted(anchors.keys())
+            if dist_high < dist_low:
+                return high
 
-    rel = {
-        s: compare(sub_id, anchors[s], relations)
-        for s in scores
-    }
-
-    # apply soft monotonic smoothing
-    rel = apply_soft_monotonic(rel, scores)
-
-    # above highest anchor
-    if rel[scores[-1]] >= 0:
-        return scores[-1]
-
-    # below lowest anchor
-    if rel[scores[0]] < 0:
-        return scores[0]
-
-    # find interval
-    for i in range(len(scores) - 1):
-        low, high = scores[i], scores[i + 1]
-
-        if rel[low] >= 0 and rel[high] <= 0:
-            return (low + high) // 2
+            return low
 
     return scores[0]
 
-def build_predictions(pairwise_data, swapped_data, anchor_map):
+def build_predictions(
+    pairwise_data,
+    swapped_data,
+    anchor_map
+):
+
     preds = defaultdict(dict)
 
-    relations = build_relations(pairwise_data, swapped_data)
+    relations = build_relations(
+        pairwise_data,
+        swapped_data
+    )
+
+    node_score = build_global_ranking(
+        relations
+    )
 
     groups = defaultdict(list)
 
     for r in pairwise_data:
-        groups[(r["id"], r["criteria"])].append(r)
+
+        key = (
+            r["id"],
+            r["criteria"]
+        )
+
+        groups[key].append(r)
 
     for (base_id, c), rows in groups.items():
-        anchors = anchor_map.get((base_id, c))
+        anchors = anchor_map.get(
+            (base_id, c)
+        )
 
         if not anchors:
             continue
@@ -142,19 +190,25 @@ def build_predictions(pairwise_data, swapped_data, anchor_map):
             subs.add(r["sub_id_2"])
 
         for sub_id in subs:
-            preds[sub_id][c] = infer_score(
+            preds[sub_id][c] = calibrate_with_anchors(
                 sub_id,
                 anchors,
-                relations
+                node_score
             )
 
     return preds
 
-def evaluate(preds, test_data, anchor_ids):
+def evaluate(
+    preds,
+    test_data,
+    anchor_ids
+):
     results = {}
 
     for c in CRITERIA:
-        y_true, y_pred = [], []
+
+        y_true = []
+        y_pred = []
 
         for r in test_data:
             sub = r["sub_id"]
@@ -163,16 +217,27 @@ def evaluate(preds, test_data, anchor_ids):
             if sub in anchor_ids:
                 continue
 
-            if sub not in preds or c not in preds[sub]:
+            if sub not in preds:
                 continue
 
-            y_true.append(r[f"{c}_score"])
-            y_pred.append(int(preds[sub][c]))
+            if c not in preds[sub]:
+                continue
+
+            y_true.append(
+                r[f"{c}_score"]
+            )
+
+            y_pred.append(
+                int(preds[sub][c])
+            )
 
         if not y_true:
             continue
 
-        mse = mean_squared_error(y_true, y_pred)
+        mse = mean_squared_error(
+            y_true,
+            y_pred
+        )
 
         kappa = cohen_kappa_score(
             y_true,
@@ -188,16 +253,28 @@ def evaluate(preds, test_data, anchor_ids):
 
     return results
 
-def run_model(pairwise_path, swapped_path, anchor_path, test_data, mode):
+def run_model(
+    pairwise_path,
+    swapped_path,
+    anchor_path,
+    test_data,
+    mode
+):
     print("\n==============================")
-    print(f"Model: {os.path.basename(pairwise_path)}")
+
+    print(
+        f"Model: "
+        f"{os.path.basename(pairwise_path)}"
+    )
 
     pairwise_data = load_jsonl(pairwise_path)
     swapped_data = load_jsonl(swapped_path)
     anchor_data = load_jsonl(anchor_path)
 
     anchor_map = build_anchor_map(anchor_data)
-    anchor_ids = collect_anchor_sub_ids(anchor_data)
+    anchor_ids = collect_anchor_sub_ids(
+        anchor_data
+    )
 
     preds = build_predictions(
         pairwise_data,
@@ -206,11 +283,21 @@ def run_model(pairwise_path, swapped_path, anchor_path, test_data, mode):
     )
 
     if mode in ["raw", "both"]:
-        res = evaluate(preds, test_data, anchor_ids)
+        res = evaluate(
+            preds,
+            test_data,
+            anchor_ids
+        )
 
-        print("{:<15} {:<15} {:<15} {:<10}".format(
-            "Criterion", "Kappa", "MSE", "N"
-        ))
+        print(
+            "{:<15} {:<15} {:<15} {:<10}".format(
+                "Criterion",
+                "Kappa",
+                "MSE",
+                "N"
+            )
+        )
+
         print("-" * 60)
 
         for k, v in res.items():
@@ -221,14 +308,22 @@ def run_model(pairwise_path, swapped_path, anchor_path, test_data, mode):
                 f"{v['n']:<10}"
             )
 
-def main(pairwise_dir, anchor_path, test_path, mode):
+def main(
+    pairwise_dir,
+    anchor_path,
+    test_path,
+    mode
+):
     test_data = load_jsonl(test_path)
 
     for f in os.listdir(pairwise_dir):
         if not f.endswith("_pairwise.jsonl"):
             continue
 
-        pairwise_path = os.path.join(pairwise_dir, f)
+        pairwise_path = os.path.join(
+            pairwise_dir,
+            f
+        )
 
         swapped_path = pairwise_path.replace(
             "_pairwise.jsonl",
@@ -246,7 +341,10 @@ def main(pairwise_dir, anchor_path, test_path, mode):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--pairwise_dir", required=True)
+    parser.add_argument(
+        "--pairwise_dir",
+        required=True
+    )
     parser.add_argument(
         "--anchor_path",
         default="data/pairwise_test_with_anchors.jsonl"
