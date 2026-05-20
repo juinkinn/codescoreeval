@@ -94,7 +94,7 @@ def infer_criteria(model, tokenizer, prompts):
                 temperature=0.3,
                 top_p=0.95,
                 repetition_penalty=1.15,
-                max_new_tokens=1000,
+                max_new_tokens=256,
                 eos_token_id=tokenizer.eos_token_id,
             )
 
