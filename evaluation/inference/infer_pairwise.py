@@ -85,71 +85,36 @@ def extract_choice(text: str):
 
 
 # ===== infer =====
-def infer(model, tokenizer, prompt):
-    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+def infer(model, tokenizer, prompt, max_retry=3):
+    for _ in range(max_retry):
+        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
-    label_map = {
-        " A": 1,
-        " B": 0,
-        " BOTH": 0.5,
-    }
+        with torch.no_grad():
+            output_ids = model.generate(
+                **inputs,
+                do_sample=True,
+                temperature=0.3,
+                top_p=0.95,
+                repetition_penalty=1.15,
+                max_new_tokens=64,
+                eos_token_id=tokenizer.eos_token_id
+            )
 
-    allowed_sequences = {
-        tuple(tokenizer.encode(k, add_special_tokens=False)): v
-        for k, v in label_map.items()
-    }
-
-    prompt_len = inputs["input_ids"].shape[1]
-
-    def prefix_allowed_tokens_fn(batch_id, input_ids):
-        generated = input_ids[prompt_len:].tolist()
-        allowed = set()
-
-        for seq in allowed_sequences.keys():
-            # check if generated is prefix of seq
-            if tuple(generated) == seq[:len(generated)]:
-                # continue sequence
-                if len(generated) < len(seq):
-                    allowed.add(seq[len(generated)])
-                else:
-                    # allow EOS after full match
-                    allowed.add(tokenizer.eos_token_id)
-
-        # fallback safety
-        if len(allowed) == 0:
-            allowed.add(tokenizer.eos_token_id)
-
-        return list(allowed)
-
-    with torch.no_grad():
-        output_ids = model.generate(
-            **inputs,
-            max_new_tokens=5,
-            do_sample=False,
-            prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
-            eos_token_id=tokenizer.eos_token_id,
+        output = tokenizer.decode(
+            output_ids[0][inputs['input_ids'].shape[1]:],
+            skip_special_tokens=True
         )
 
-    generated_ids = output_ids[0][prompt_len:]
+        pred = extract_choice(output)
 
-    output = tokenizer.decode(
-        generated_ids,
-        skip_special_tokens=True
-    ).strip()
-
-    pred = None
-    for label, value in label_map.items():
-        if output == label.strip():
-            pred = value
-            break
-
-    print(output)
-    print(pred)
+        if pred is not None:
+            del inputs, output_ids
+            torch.cuda.empty_cache()
+            return pred
 
     del inputs, output_ids
     torch.cuda.empty_cache()
-
-    return pred
+    return None
 
 
 # ===== main =====

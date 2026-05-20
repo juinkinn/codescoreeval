@@ -81,29 +81,35 @@ def extract_score(text: str):
     return Counter(numbers).most_common(1)[0][0]
 
 
-def infer_criteria(model, tokenizer, prompts):
+def infer_criteria(model, tokenizer, prompts, max_retry=3):
     results = {}
 
     for criterion, prompt_text in prompts.items():
-        inputs = tokenizer(prompt_text, return_tensors="pt").to(model.device)
+        score = None
+        for _ in range(max_retry):
 
-        with torch.no_grad():
-            output_ids = model.generate(
-                **inputs,
-                do_sample=True,
-                temperature=0.3,
-                top_p=0.95,
-                repetition_penalty=1.15,
-                max_new_tokens=128,
-                eos_token_id=tokenizer.eos_token_id,
-            )
+            inputs = tokenizer(prompt_text, return_tensors="pt").to(model.device)
 
-        output = tokenizer.decode(
-            output_ids[0][inputs["input_ids"].shape[1]:],
-            skip_special_tokens=True,
-        ).strip()
-        print(output)
-        score = extract_score(output)
+            with torch.no_grad():
+                output_ids = model.generate(
+                    **inputs,
+                    do_sample=True,
+                    temperature=0.3,
+                    top_p=0.95,
+                    repetition_penalty=1.15,
+                    max_new_tokens=128,
+                    eos_token_id=tokenizer.eos_token_id,
+                )
+
+            output = tokenizer.decode(
+                output_ids[0][inputs["input_ids"].shape[1]:],
+                skip_special_tokens=True,
+            ).strip()
+
+            score = extract_score(output)
+
+            if score is not None and 1 <= score <= 5:
+                break
 
         results[f"{criterion}_score"] = score
 
