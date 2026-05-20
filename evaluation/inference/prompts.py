@@ -131,7 +131,7 @@ for ALL possible valid inputs of the problem.
 In other words, determine if the implementation would pass in every case,
 not just some example cases.
 
-Compare TWO code submissions based ONLY on code readability.
+Compare TWO code submissions based ONLY on code correctness.
 
 Problem Description:
 {description}
@@ -169,7 +169,7 @@ If the code is incomplete, logically incorrect, or partially implemented:
 - Try to infer the intended algorithmic approach from the code.
 - Compare based on that inferred approach.
 
-Compare TWO code submissions based ONLY on code readability.
+Compare TWO code submissions based ONLY on code algorithm efficiency.
 
 Problem Description:
 {description}
