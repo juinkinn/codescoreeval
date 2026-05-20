@@ -5,20 +5,8 @@ from tqdm import tqdm
 import argparse
 import re
 
-from evaluation.inference.loader import load_tokenizer, load_model
+from loader import load_tokenizer, load_model
 from prompts import CORRECTNESS_PAIRWISE, EFFICIENCY_PAIRWISE, READABILITY_PAIRWISE
-
-
-# ===== truncate =====
-def smart_truncate(code, max_chars=10000):
-    if not code:
-        return code
-        
-    if len(code) <= max_chars:
-        return code
-
-    half = max_chars // 2
-    return code[:half] + "\n...\n" + code[-half:]
 
 
 # ===== load submissions map =====
@@ -49,8 +37,8 @@ def build_prompt(sample, sub_map, metadata_map):
     base_id = sample["sub_id_1"].rsplit("_", 1)[0]
     description = metadata_map.get(base_id, "")
 
-    code1 = smart_truncate(sub1.get("code", ""))
-    code2 = smart_truncate(sub2.get("code", ""))
+    code1 = sub1.get("code", "")
+    code2 = sub2.get("code", "")
 
     # Select prompt template based on criterion
     criterion = sample["criteria"]
@@ -100,22 +88,64 @@ def extract_choice(text: str):
 def infer(model, tokenizer, prompt):
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
+    label_map = {
+        " A": 1,
+        " B": 0,
+        " BOTH": 0.5,
+    }
+
+    allowed_sequences = {
+        tuple(tokenizer.encode(k, add_special_tokens=False)): v
+        for k, v in label_map.items()
+    }
+
+    prompt_len = inputs["input_ids"].shape[1]
+
+    def prefix_allowed_tokens_fn(batch_id, input_ids):
+        generated = input_ids[prompt_len:].tolist()
+        allowed = set()
+
+        for seq in allowed_sequences.keys():
+            # check if generated is prefix of seq
+            if tuple(generated) == seq[:len(generated)]:
+                # continue sequence
+                if len(generated) < len(seq):
+                    allowed.add(seq[len(generated)])
+                else:
+                    # allow EOS after full match
+                    allowed.add(tokenizer.eos_token_id)
+
+        # fallback safety
+        if len(allowed) == 0:
+            allowed.add(tokenizer.eos_token_id)
+
+        return list(allowed)
+
     with torch.no_grad():
         output_ids = model.generate(
             **inputs,
-            do_sample=True,
-            temperature=0.3,
-            max_new_tokens=64,
-            eos_token_id=tokenizer.eos_token_id
+            max_new_tokens=5,
+            do_sample=False,
+            prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
+            eos_token_id=tokenizer.eos_token_id,
         )
 
+    generated_ids = output_ids[0][prompt_len:]
+
     output = tokenizer.decode(
-        output_ids[0][inputs['input_ids'].shape[1]:],
+        generated_ids,
         skip_special_tokens=True
-    )
+    ).strip()
+
+    pred = None
+    for label, value in label_map.items():
+        if output == label.strip():
+            pred = value
+            break
+
     print(output)
-    pred = extract_choice(output)
     print(pred)
+
     del inputs, output_ids
     torch.cuda.empty_cache()
 
@@ -124,9 +154,9 @@ def infer(model, tokenizer, prompt):
 
 # ===== main =====
 def main(model_name,
-         pairwise_path="./data/pairwise_test.jsonl",
-         submissions_path="./data/submissions.jsonl",
-         metadata_path="./data/metadata.jsonl",
+         pairwise_path="../../data/pairwise_test.jsonl",
+         submissions_path="../../data/submissions.jsonl",
+         metadata_path="../../data/metadata.jsonl",
          use_bnb=False,
          limit=None):
 
@@ -174,9 +204,9 @@ def main(model_name,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", type=str, required=True)
-    parser.add_argument("--pairwise_path", type=str, default="./data/pairwise_test.jsonl")
-    parser.add_argument("--submissions_path", type=str, default="./data/submissions.jsonl")
-    parser.add_argument("--metadata_path", type=str, default="./data/metadata.jsonl")
+    parser.add_argument("--pairwise_path", type=str, default="../../data/pairwise_test.jsonl")
+    parser.add_argument("--submissions_path", type=str, default="../../data/submissions.jsonl")
+    parser.add_argument("--metadata_path", type=str, default="../../data/metadata.jsonl")
     parser.add_argument("--use_bnb", action="store_true")
     parser.add_argument("--limit", type=int)
 

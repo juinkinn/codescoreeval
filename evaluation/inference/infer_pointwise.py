@@ -1,8 +1,8 @@
 import torch
 import json
 import os
-from evaluation.inference.dataset import SubmissionDataset
-from evaluation.inference.loader import load_tokenizer, load_model
+from dataset import SubmissionDataset
+from loader import load_tokenizer, load_model
 from prompts import CORRECTNESS_PROMPT, EFFICIENCY_PROMPT, SYNTAX_PROMPT
 from tqdm import tqdm
 import re
@@ -19,56 +19,6 @@ def build_prompts(submission):
         "readability": SYNTAX_PROMPT.format(code=code, lang=lang, description=desc)
     }
 
-
-def extract_score(output: str):
-    if not output or not isinstance(output, str):
-        return None
-
-    text = output.lower().strip()
-
-    try:
-        val = float(text)
-        if 1 <= val <= 5:
-            return int(val)
-    except:
-        pass
-
-    patterns = [
-        r"score\s*[:=]?\s*([1-5])",
-        r"([1-5])\s*/\s*5",
-        r"([1-5])\s*out of\s*5",
-        r"rating\s*[:=]?\s*([1-5])",
-        r"i give (?:it )?([1-5])",
-    ]
-
-    for p in patterns:
-        match = re.search(p, text)
-        if match:
-            return int(match.group(1))
-
-    sentence_patterns = [
-        r"score (?:is|of)?\s*([1-5])",
-        r"would be\s*([1-5])",
-        r"should be\s*([1-5])",
-        r"rated\s*([1-5])",
-    ]
-
-    for p in sentence_patterns:
-        match = re.search(p, text)
-        if match:
-            return int(match.group(1))
-
-    numbers = re.findall(r"\b[1-5]\b", text)
-
-    if not numbers:
-        return None
-
-    numbers = [int(n) for n in numbers]
-
-    if len(set(numbers)) > 1:
-        return Counter(numbers).most_common(1)[0][0]
-
-    return numbers[0]
 
 def infer_criteria(model, tokenizer, prompts, model_name=None):
     results = {}
@@ -98,7 +48,7 @@ def infer_criteria(model, tokenizer, prompts, model_name=None):
             output_ids = model.generate(
                 **inputs,
                 do_sample=False,                     
-                max_new_tokens=1,                   
+                max_new_tokens=5,                   
                 prefix_allowed_tokens_fn=prefix_allowed_tokens_fn,
                 eos_token_id=tokenizer.eos_token_id
             )
@@ -120,7 +70,7 @@ def infer_criteria(model, tokenizer, prompts, model_name=None):
 
     return results
 
-def main(model_name, use_bnb=False, submissions_path="./data/original_test.jsonl", metadata_path="./data/metadata.jsonl", limit=None):
+def main(model_name, use_bnb=False, submissions_path="../../data/original_test.jsonl", metadata_path="../../data/metadata.jsonl", limit=None):
     dataset = SubmissionDataset(submissions_path, metadata_path, limit=limit)
     tokenizer = load_tokenizer(model_name)
     model = load_model(model_name, use_bnb=use_bnb, device_map="cuda")
