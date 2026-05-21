@@ -21,8 +21,7 @@ Evaluate the syntax/readability of the following {lang} code:
 
 {code}
 
-Final answer (1, 2, 3, 4, or 5 only):
-"""
+Final answer (1, 2, 3, 4, or 5 only): """
 
 CORRECTNESS_PROMPT = """\
 You are a Senior Code Reviewer evaluating ONLY the logical correctness of the code.
@@ -48,8 +47,7 @@ Evaluate the correctness of the following code snippet:
 {code}
 ```
 
-Final answer (1, 2, 3, 4, or 5 only):
-"""
+Final answer (1, 2, 3, 4, or 5 only): """
 
 EFFICIENCY_PROMPT = """\
 You are a Senior Code Reviewer. Your SOLE purpose is to evaluate the Time and Space Complexity of the code 
@@ -87,8 +85,7 @@ Evaluate the efficiency of the following code snippet:
 {code}
 ```
 
-Final answer (1, 2, 3, 4, or 5 only):
-"""
+Final answer (1, 2, 3, 4, or 5 only): """
 
 READABILITY_PAIRWISE = """\
 You are a Senior Code Reviewer comparing readability of TWO code submissions.
@@ -136,10 +133,10 @@ Problem Description:
 {description}
 
 Code A ({lang1}):
-{code2}
+{code1}
 
 Code B ({lang2}):
-{code1}
+{code2}
 
 Which code is better?
 
