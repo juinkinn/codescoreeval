@@ -30,18 +30,28 @@ def load_metadata(path):
 
 
 # ===== build prompt =====
-def build_prompt(sample, sub_map, metadata_map):
+def build_prompt(sample, sub_map, metadata_map, swapped=False):
     sub1 = sub_map[sample["sub_id_1"]]
     sub2 = sub_map[sample["sub_id_2"]]
 
     base_id = sample["sub_id_1"].rsplit("_", 1)[0]
     description = metadata_map.get(base_id, "")
 
+    # default order
     code1 = sub1.get("code", "")
     code2 = sub2.get("code", "")
 
+    lang1 = sub1.get("lang", "")
+    lang2 = sub2.get("lang", "")
+
+    # swap if needed
+    if swapped:
+        code1, code2 = code2, code1
+        lang1, lang2 = lang2, lang1
+
     # Select prompt template based on criterion
     criterion = sample["criteria"]
+
     if criterion == "correctness":
         prompt_template = CORRECTNESS_PAIRWISE
     elif criterion == "efficiency":
@@ -49,14 +59,14 @@ def build_prompt(sample, sub_map, metadata_map):
     elif criterion == "readability":
         prompt_template = READABILITY_PAIRWISE
     else:
-        prompt_template = READABILITY_PAIRWISE  # Default fallback
+        prompt_template = READABILITY_PAIRWISE
 
     return prompt_template.format(
         description=description,
         code1=code1,
         code2=code2,
-        lang1=sub1.get("lang", ""),
-        lang2=sub2.get("lang", "")
+        lang1=lang1,
+        lang2=lang2
     )
 
 
@@ -81,7 +91,6 @@ def extract_choice(text: str):
         return 0
 
     return None
-
 
 
 # ===== infer =====
@@ -123,6 +132,7 @@ def main(model_name,
          submissions_path="../../data/submissions.jsonl",
          metadata_path="../../data/metadata.jsonl",
          use_bnb=False,
+         swapped=False,
          limit=None):
 
     tokenizer = load_tokenizer(model_name)
@@ -132,8 +142,10 @@ def main(model_name,
     metadata_map = load_metadata(metadata_path)
 
     os.makedirs("output", exist_ok=True)
+    suffix = "_swapped" if swapped else ""
     output_file = os.path.join(
-        "output", f"{model_name.replace('/', '_')}_pairwise.jsonl"
+        "output",
+        f"{model_name.replace('/', '_')}_pairwise{suffix}.jsonl"
     )
 
     total = sum(1 for _ in open(pairwise_path, "r", encoding="utf-8"))
@@ -147,7 +159,13 @@ def main(model_name,
 
             sample = json.loads(line)
 
-            prompt = build_prompt(sample, sub_map, metadata_map)
+            prompt = build_prompt(
+                sample,
+                sub_map,
+                metadata_map,
+                swapped=swapped
+            )
+
             pred = infer(model, tokenizer, prompt)
 
             out = {
@@ -155,7 +173,7 @@ def main(model_name,
                 "criteria": sample["criteria"],
                 "sub_id_1": sample["sub_id_1"],
                 "sub_id_2": sample["sub_id_2"],
-                "label": sample["label"],   # 1 / 2 / 0
+                "label": sample["label"],
                 "prediction": pred
             }
 
@@ -169,10 +187,14 @@ def main(model_name,
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", type=str, required=True)
-    parser.add_argument("--pairwise_path", type=str, default="../../data/pairwise_test.jsonl")
-    parser.add_argument("--submissions_path", type=str, default="../../data/submissions.jsonl")
-    parser.add_argument("--metadata_path", type=str, default="../../data/metadata.jsonl")
+    parser.add_argument("--pairwise_path", type=str,
+                        default="../../data/pairwise_test.jsonl")
+    parser.add_argument("--submissions_path", type=str,
+                        default="../../data/submissions.jsonl")
+    parser.add_argument("--metadata_path", type=str,
+                        default="../../data/metadata.jsonl")
     parser.add_argument("--use_bnb", action="store_true")
+    parser.add_argument("--swapped", action="store_true")
     parser.add_argument("--limit", type=int)
 
     args = parser.parse_args()
@@ -183,5 +205,6 @@ if __name__ == "__main__":
         submissions_path=args.submissions_path,
         metadata_path=args.metadata_path,
         use_bnb=args.use_bnb,
+        swapped=args.swapped,
         limit=args.limit
     )
