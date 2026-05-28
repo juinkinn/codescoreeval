@@ -92,9 +92,42 @@ def extract_choice(text: str):
 
     return None
 
+def make_key(sample):
+    return (
+        sample["id"],
+        sample["criteria"],
+        sample["sub_id_1"],
+        sample["sub_id_2"],
+    )
+
+# ===== load completed ids =====
+def load_completed_ids(output_file):
+    completed = set()
+
+    if not os.path.exists(output_file):
+        return completed
+
+    with open(output_file, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                j = json.loads(line)
+
+                key = (
+                    j["id"],
+                    j["criteria"],
+                    j["sub_id_1"],
+                    j["sub_id_2"],
+                )
+
+                completed.add(key)
+
+            except:
+                pass
+
+    return completed
 
 # ===== infer =====
-def infer(model, tokenizer, prompt, max_retry=3):
+def infer(model, tokenizer, prompt, max_retry=2):
     for _ in range(max_retry):
         inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
 
@@ -105,7 +138,7 @@ def infer(model, tokenizer, prompt, max_retry=3):
                 temperature=0.3,
                 top_p=0.95,
                 repetition_penalty=1.15,
-                max_new_tokens=64,
+                max_new_tokens=32,
                 eos_token_id=tokenizer.eos_token_id
             )
 
@@ -148,16 +181,29 @@ def main(model_name,
         f"{model_name.replace('/', '_')}_pairwise{suffix}.jsonl"
     )
 
+    completed_ids = load_completed_ids(output_file)
+
+    print(f"Found {len(completed_ids)} completed samples")
     total = sum(1 for _ in open(pairwise_path, "r", encoding="utf-8"))
 
     with open(pairwise_path, "r", encoding="utf-8") as f_in, \
-         open(output_file, "w", encoding="utf-8") as f_out:
+         open(output_file, "a", encoding="utf-8") as f_out:
 
         for i, line in enumerate(tqdm(f_in, desc="Pairwise infer", total=total)):
             if limit and i >= limit:
                 break
 
             sample = json.loads(line)
+
+            key = (
+                sample["id"],
+                sample["criteria"],
+                sample["sub_id_1"],
+                sample["sub_id_2"],
+            )
+
+            if key in completed_ids:
+                continue
 
             prompt = build_prompt(
                 sample,
