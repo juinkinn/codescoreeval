@@ -207,9 +207,9 @@ def resolve_model_path(model_name, MODEL_PATHS):
 
 # ===== main =====
 def main(model_name,
-         pairwise_path="/data/pairwise_test.jsonl",
-         submissions_path="/data/submissions.jsonl",
-         metadata_path="/data/metadata.jsonl",
+         pairwise_path="data/pairwise_test.jsonl",
+         submissions_path="data/submissions.jsonl",
+         metadata_path="data/metadata.jsonl",
          use_bnb=False,
          swapped=False,
          limit=None):
@@ -299,11 +299,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model_name", type=str, required=True)
     parser.add_argument("--pairwise_path", type=str,
-                        default="/data/pairwise_test.jsonl")
+                        default="data/pairwise_test.jsonl")
     parser.add_argument("--submissions_path", type=str,
-                        default="/data/submissions.jsonl")
+                        default="data/submissions.jsonl")
     parser.add_argument("--metadata_path", type=str,
-                        default="/data/metadata.jsonl")
+                        default="data/metadata.jsonl")
     parser.add_argument("--use_bnb", action="store_true")
     parser.add_argument("--swapped", action="store_true")
     parser.add_argument("--limit", type=int)
