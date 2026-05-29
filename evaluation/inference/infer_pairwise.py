@@ -195,6 +195,16 @@ MODEL_PATHS = {
         ),
 }
 
+def resolve_model_path(model_name, MODEL_PATHS):
+    local_path = MODEL_PATHS.get(model_name)
+
+    if local_path is not None and os.path.isdir(local_path):
+        print(f"[MODEL] Using LOCAL: {local_path}")
+        return local_path
+
+    print(f"[MODEL] Using HF: {model_name}")
+    return model_name
+
 # ===== main =====
 def main(model_name,
          pairwise_path="../../data/pairwise_test.jsonl",
@@ -205,7 +215,7 @@ def main(model_name,
          limit=None):
 
     # convert HF name -> local path if exists
-    resolved_model_path = MODEL_PATHS.get(model_name, model_name)
+    resolved_model_path = resolve_model_path(model_name, MODEL_PATHS)
 
     print(f"Loading model from: {resolved_model_path}")
 
