@@ -159,6 +159,42 @@ def infer(model, tokenizer, prompt, max_retry=2):
     return None
 
 
+# ===== base dir of current file =====
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ===== HF -> local path mapping =====
+MODEL_PATHS = {
+    "google/gemma-3-4b-it":
+        os.path.abspath(
+            os.path.join(BASE_DIR,
+            "../../../models/gemma-3-4b-it")
+        ),
+
+    "Qwen/Qwen2.5-3B-Instruct":
+        os.path.abspath(
+            os.path.join(BASE_DIR,
+            "../../../models/qwen-3b")
+        ),
+
+    "Qwen/Qwen2.5-Coder-3B-Instruct":
+        os.path.abspath(
+            os.path.join(BASE_DIR,
+            "../../../models/qwen-coder-3b")
+        ),
+
+    "Qwen/Qwen2.5-Coder-7B-Instruct":
+        os.path.abspath(
+            os.path.join(BASE_DIR,
+            "../../../models/qwen-coder-7b")
+        ),
+
+    "stabilityai/stable-code-instruct-3b":
+        os.path.abspath(
+            os.path.join(BASE_DIR,
+            "../../../models/stable-code-3b")
+        ),
+}
+
 # ===== main =====
 def main(model_name,
          pairwise_path="../../data/pairwise_test.jsonl",
@@ -168,8 +204,18 @@ def main(model_name,
          swapped=False,
          limit=None):
 
-    tokenizer = load_tokenizer(model_name)
-    model = load_model(model_name, use_bnb=use_bnb, device_map="cuda")
+    # convert HF name -> local path if exists
+    resolved_model_path = MODEL_PATHS.get(model_name, model_name)
+
+    print(f"Loading model from: {resolved_model_path}")
+
+    tokenizer = load_tokenizer(resolved_model_path)
+
+    model = load_model(
+        resolved_model_path,
+        use_bnb=use_bnb,
+        device_map="cuda"
+    )
 
     sub_map = load_submissions(submissions_path)
     metadata_map = load_metadata(metadata_path)
@@ -184,12 +230,18 @@ def main(model_name,
     completed_ids = load_completed_ids(output_file)
 
     print(f"Found {len(completed_ids)} completed samples")
-    total = sum(1 for _ in open(pairwise_path, "r", encoding="utf-8"))
+
+    total = sum(
+        1 for _ in open(pairwise_path, "r", encoding="utf-8")
+    )
 
     with open(pairwise_path, "r", encoding="utf-8") as f_in, \
          open(output_file, "a", encoding="utf-8") as f_out:
 
-        for i, line in enumerate(tqdm(f_in, desc="Pairwise infer", total=total)):
+        for i, line in enumerate(
+            tqdm(f_in, desc="Pairwise infer", total=total)
+        ):
+
             if limit and i >= limit:
                 break
 
@@ -223,7 +275,10 @@ def main(model_name,
                 "prediction": pred
             }
 
-            f_out.write(json.dumps(out, ensure_ascii=False) + "\n")
+            f_out.write(
+                json.dumps(out, ensure_ascii=False) + "\n"
+            )
+
             f_out.flush()
 
     print(f"Inference done! Saved to {output_file}")
