@@ -29,14 +29,14 @@ def load_model(model_name: str, use_bnb: bool = False, device_map="cuda"):
     kwargs = dict(
         device_map=device_map,
         trust_remote_code=True,
-        torch_dtype=torch.bfloat16,
+        torch_dtype=torch.float16,
     )
 
     # 4bit quant
     if use_bnb:
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_compute_dtype=torch.float16,
             bnb_4bit_use_double_quant=True,
             bnb_4bit_quant_type="nf4"
         )
