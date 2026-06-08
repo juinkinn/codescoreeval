@@ -10,6 +10,7 @@ from sklearn.metrics import cohen_kappa_score, mean_absolute_error, f1_score
 LABEL_TO_IDX = {0: 0, 0.5: 1, 1: 2}
 FLIP         = {0: 1, 0.5: 0.5, 1: 0}
 MODES        = ["raw", "debiased", "p2p"]
+MERGE_KEYS   = ("id", "criteria", "sub_id_1", "sub_id_2")
 
 
 def load_jsonl(path):
@@ -20,9 +21,28 @@ def load_jsonl(path):
     ]
 
 
+def add_labels_from_pairwise(data, pairwise_data):
+    label_index = {
+        tuple(row[k] for k in MERGE_KEYS): row["label"]
+        for row in pairwise_data
+    }
+
+    result = []
+    for row in data:
+        row = row.copy()
+        if "label" not in row:
+            key = tuple(row[k] for k in MERGE_KEYS)
+            row["label"] = label_index[key]
+        result.append(row)
+
+    return result
+
+
 def unswap_predictions(data):
     result = []
     for row in data:
+        if row.get("prediction") not in FLIP:
+            continue
         row = row.copy()
         row["prediction"] = FLIP[row["prediction"]]
         result.append(row)
@@ -36,13 +56,11 @@ def aggregate_prediction(orig: float, flipped: float) -> float:
 
 
 def build_debiased(pairwise_data, swapped_data, silent=False):
-    merge_keys = ("id", "criteria", "sub_id_1", "sub_id_2")
-
     swapped_flipped = unswap_predictions(swapped_data)
 
     # Index swapped by key for lookup
     swapped_index = {
-        tuple(row[k] for k in merge_keys): row["prediction"]
+        tuple(row[k] for k in MERGE_KEYS): row["prediction"]
         for row in swapped_flipped
     }
 
@@ -50,9 +68,13 @@ def build_debiased(pairwise_data, swapped_data, silent=False):
     n_inconsistent = 0
 
     for row in pairwise_data:
-        key = tuple(row[k] for k in merge_keys)
+        key = tuple(row[k] for k in MERGE_KEYS)
         orig    = row["prediction"]
         flipped = swapped_index.get(key)
+
+        if orig not in LABEL_TO_IDX:
+            result.append(row.copy())
+            continue
 
         if flipped is None:
             # No swapped counterpart — keep original
@@ -86,7 +108,10 @@ def print_distribution(pairwise_data, swapped_data, p2p_data):
     Only computed once per model, not per mode.
     """
     def dist(values):
+        values = [v for v in values if v in LABEL_TO_IDX]
         total = len(values)
+        if total == 0:
+            return {}
         counts = pd.Series(values).value_counts()
         return {v: counts.get(v, 0) / total for v in [0, 0.5, 1]}
 
@@ -136,8 +161,16 @@ def compute_metrics(y_true_raw, y_pred_raw):
 
 def evaluate(data):
     """Overall + per-criteria metrics."""
+    data = [
+        row for row in data
+        if row.get("label") in LABEL_TO_IDX
+        and row.get("prediction") in LABEL_TO_IDX
+    ]
     df = pd.DataFrame(data)
     rows = []
+
+    if df.empty:
+        return pd.DataFrame(columns=["criteria", "n_samples", "qwk", "mae", "f1_macro"])
 
     m = compute_metrics(df["label"].values, df["prediction"].values)
     rows.append({"criteria": "ALL", **m})
@@ -153,20 +186,22 @@ def evaluate(data):
 # Per-mode runner
 # ---------------------------------------------------------------------------
 
-def run_mode(mode, pairwise_path, swapped_path,p2p_path):
+def run_mode(mode, pairwise_path, swapped_path, p2p_path):
     print(f"\n  -- Mode: {mode} --")
 
+    pairwise_data = load_jsonl(pairwise_path)
+
     if mode == "raw":
-        data = load_jsonl(pairwise_path)
+        data = pairwise_data
 
     elif mode == "debiased":
         data = build_debiased(
-            load_jsonl(pairwise_path),
+            pairwise_data,
             load_jsonl(swapped_path),
         )
 
     elif mode == "p2p":
-        data = load_jsonl(p2p_path)
+        data = add_labels_from_pairwise(load_jsonl(p2p_path), pairwise_data)
 
     results = evaluate(data)
     print(results[["criteria", "n_samples", "qwk", "mae", "f1_macro"]].to_string(index=False))
@@ -219,7 +254,7 @@ def main():
         missing = []
         if "debiased" in modes and not os.path.exists(swapped_path):
             missing.append(swapped_path)
-        if "pointwise_to_pairwise" in modes and not os.path.exists(p2p_path):
+        if "p2p" in modes and not os.path.exists(p2p_path):
             missing.append(p2p_path)
         if missing:
             print(f"\n[SKIP] Missing files for {f}:\n  " + "\n  ".join(missing))
