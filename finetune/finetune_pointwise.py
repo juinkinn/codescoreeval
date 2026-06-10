@@ -1,28 +1,22 @@
 import argparse
-import json
 import random
 import sys
 from pathlib import Path
+
+from unsloth import FastLanguageModel
+from unsloth.chat_templates import train_on_responses_only
+from datasets import Dataset
+from trl import SFTConfig, SFTTrainer
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
 
-from evaluation.inference.prompts import CORRECTNESS_PROMPT, EFFICIENCY_PROMPT, SYNTAX_PROMPT
 from evaluation.utils import load_jsonl
-from trl import SFTConfig, SFTTrainer
-from datasets import Dataset
-from unsloth import FastLanguageModel
-from unsloth.chat_templates import train_on_responses_only
-from transformers import TrainingArguments
+from finetune.prompt import POINTWISE_PROMPTS
 
 
 CRITERIA = ("correctness", "efficiency", "readability")
-PROMPTS = {
-    "correctness": CORRECTNESS_PROMPT,
-    "efficiency": EFFICIENCY_PROMPT,
-    "readability": SYNTAX_PROMPT,
-}
 
 
 def load_map(path, key):
@@ -41,18 +35,16 @@ def build_messages(criterion, label, submission, metadata):
     description = metadata.get("description", "")
     score = str(label[f"{criterion}_score"])
 
-    prompt = PROMPTS[criterion].format(
+    system_prompt, user_prompt = POINTWISE_PROMPTS[criterion]
+    user_prompt = user_prompt.format(
         code=code,
         lang=lang,
         description=description,
     ).strip()
 
     return [
-        {
-            "role": "system",
-            "content": "You are a senior competitive programming code reviewer. Return only one integer from 1 to 5.",
-        },
-        {"role": "user", "content": prompt},
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
         {"role": "assistant", "content": score},
     ]
 
@@ -116,91 +108,71 @@ def prepare_output_dir(output_dir):
 
 
 def make_training_arguments(args):
-    try:
-        return SFTConfig(
-            output_dir=args.output_dir,
-            max_seq_length=args.max_seq_length,
-            dataset_text_field="text",
-            per_device_train_batch_size=args.batch_size,
-            per_device_eval_batch_size=args.eval_batch_size,
-            gradient_accumulation_steps=args.gradient_accumulation_steps,
-            learning_rate=args.learning_rate,
-            num_train_epochs=args.epochs,
-            warmup_ratio=args.warmup_ratio,
-            weight_decay=args.weight_decay,
-            lr_scheduler_type=args.lr_scheduler_type,
-            logging_steps=args.logging_steps,
-            eval_strategy="steps" if args.eval_steps > 0 else "no",
-            eval_steps=args.eval_steps if args.eval_steps > 0 else None,
-            save_steps=args.save_steps,
-            save_total_limit=args.save_total_limit,
-            gradient_checkpointing=args.gradient_checkpointing,
-            bf16=not args.fp16,
-            fp16=args.fp16,
-            optim=args.optim,
-            seed=args.seed,
-            report_to=args.report_to,
-        )
-    except ImportError:
-        return TrainingArguments(
-            output_dir=args.output_dir,
-            per_device_train_batch_size=args.batch_size,
-            per_device_eval_batch_size=args.eval_batch_size,
-            gradient_accumulation_steps=args.gradient_accumulation_steps,
-            learning_rate=args.learning_rate,
-            num_train_epochs=args.epochs,
-            warmup_ratio=args.warmup_ratio,
-            weight_decay=args.weight_decay,
-            lr_scheduler_type=args.lr_scheduler_type,
-            logging_steps=args.logging_steps,
-            evaluation_strategy="steps" if args.eval_steps > 0 else "no",
-            eval_steps=args.eval_steps if args.eval_steps > 0 else None,
-            save_steps=args.save_steps,
-            save_total_limit=args.save_total_limit,
-            gradient_checkpointing=args.gradient_checkpointing,
-            bf16=not args.fp16,
-            fp16=args.fp16,
-            optim=args.optim,
-            seed=args.seed,
-            report_to=args.report_to,
-        )
+    return SFTConfig(
+        output_dir=args.output_dir,
+        max_length=args.max_length,
+        dataset_text_field="text",
+        per_device_train_batch_size=args.batch_size,
+        per_device_eval_batch_size=args.eval_batch_size,
+        gradient_accumulation_steps=args.gradient_accumulation_steps,
+        learning_rate=args.learning_rate,
+        num_train_epochs=args.epochs,
+        warmup_ratio=args.warmup_ratio,
+        weight_decay=args.weight_decay,
+        lr_scheduler_type=args.lr_scheduler_type,
+        logging_steps=args.logging_steps,
+        eval_strategy="steps" if args.eval_steps > 0 else "no",
+        eval_steps=args.eval_steps if args.eval_steps > 0 else None,
+        save_steps=args.save_steps,
+        save_total_limit=args.save_total_limit,
+        gradient_checkpointing=args.gradient_checkpointing,
+        bf16=not args.fp16,
+        fp16=args.fp16,
+        optim=args.optim,
+        seed=args.seed,
+        report_to=args.report_to,
+    )
 
 
 def create_trainer(model, tokenizer, train_dataset, valid_dataset, training_args, args):
-
-    common = {
-        "model": model,
-        "train_dataset": train_dataset,
-        "eval_dataset": valid_dataset if len(valid_dataset) else None,
-        "args": training_args,
-    }
-
-    try:
-        return SFTTrainer(
-            **common,
-            processing_class=tokenizer,
-            dataset_text_field="text",
-            max_seq_length=args.max_seq_length,
-        )
-    except TypeError:
-        return SFTTrainer(
-            **common,
-            tokenizer=tokenizer,
-            dataset_text_field="text",
-            max_seq_length=args.max_seq_length,
-        )
+    return SFTTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_dataset,
+        eval_dataset=valid_dataset if len(valid_dataset) else None,
+        processing_class=tokenizer,
+    )
 
 
-def maybe_train_on_responses_only(trainer, args):
+def enable_response_only_training(trainer, tokenizer, args):
     if args.disable_train_on_responses_only:
         return trainer
 
     try:
+        user_marker = "__USER_SENTINEL__"
+        assistant_marker = "__ASSISTANT_SENTINEL__"
+        rendered = tokenizer.apply_chat_template(
+            [
+                {"role": "user", "content": user_marker},
+                {"role": "assistant", "content": assistant_marker},
+            ],
+            tokenize=False,
+            add_generation_prompt=False,
+        )
+
+        user_pos = rendered.index(user_marker)
+        assistant_pos = rendered.index(assistant_marker)
+
+        instruction_part = rendered[:user_pos]
+        response_part = rendered[user_pos + len(user_marker):assistant_pos]
+
+        if not instruction_part or not response_part:
+            raise ValueError("Could not infer response-only markers from chat template")
 
         return train_on_responses_only(
             trainer,
-            instruction_part="<|im_start|>user\n",
-            response_part="<|im_start|>assistant\n",
+            instruction_part=instruction_part,
+            response_part=response_part,
         )
     except Exception as exc:
         print(f"[WARN] Could not enable response-only loss masking: {exc}")
@@ -216,7 +188,7 @@ def main():
     parser.add_argument("--metadata", default="data/metadata.jsonl")
     parser.add_argument("--output-dir", default="output/finetune/qwen2_5_coder_3b_pointwise")
 
-    parser.add_argument("--max-seq-length", type=int, default=4096)
+    parser.add_argument("--max-length", type=int, default=4096)
     parser.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=32)
@@ -252,7 +224,7 @@ def main():
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,
-        max_seq_length=args.max_seq_length,
+        max_seq_length=args.max_length,
         dtype=None,
         load_in_4bit=args.load_in_4bit,
     )
@@ -300,7 +272,7 @@ def main():
 
     training_args = make_training_arguments(args)
     trainer = create_trainer(model, tokenizer, train_dataset, valid_dataset, training_args, args)
-    trainer = maybe_train_on_responses_only(trainer, args)
+    trainer = enable_response_only_training(trainer, tokenizer, args)
 
     trainer.train()
     trainer.save_model(args.output_dir)
