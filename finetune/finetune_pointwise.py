@@ -106,6 +106,15 @@ def parse_target_modules(value):
     return [module.strip() for module in value.split(",") if module.strip()]
 
 
+def prepare_output_dir(output_dir):
+    if not output_dir or not output_dir.strip():
+        raise ValueError("--output-dir must not be empty")
+
+    path = Path(output_dir)
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
+
+
 def make_training_arguments(args):
     try:
         return SFTConfig(
@@ -239,6 +248,7 @@ def main():
     parser.add_argument("--disable-train-on-responses-only", action="store_true")
     parser.add_argument("--save-merged-16bit", action="store_true")
     args = parser.parse_args()
+    args.output_dir = prepare_output_dir(args.output_dir)
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,
