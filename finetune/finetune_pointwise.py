@@ -6,6 +6,7 @@ from pathlib import Path
 from unsloth import FastLanguageModel
 from unsloth.chat_templates import train_on_responses_only
 from datasets import Dataset
+import torch
 from trl import SFTConfig, SFTTrainer
 
 
@@ -107,7 +108,30 @@ def prepare_output_dir(output_dir):
     return str(path)
 
 
+def resolve_precision(precision):
+    if precision == "bf16":
+        if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
+            raise ValueError("bf16 requested, but this GPU does not support bf16")
+        return True, False, "bf16"
+
+    if precision == "fp16":
+        return False, True, "fp16"
+
+    if precision == "fp32":
+        return False, False, "fp32"
+
+    if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+        return True, False, "bf16"
+
+    if torch.cuda.is_available():
+        return False, True, "fp16"
+
+    return False, False, "fp32"
+
+
 def make_training_arguments(args):
+    bf16, fp16, _ = resolve_precision(args.precision)
+
     return SFTConfig(
         output_dir=args.output_dir,
         max_length=args.max_length,
@@ -126,8 +150,8 @@ def make_training_arguments(args):
         save_steps=args.save_steps,
         save_total_limit=args.save_total_limit,
         gradient_checkpointing=args.gradient_checkpointing,
-        bf16=not args.fp16,
-        fp16=args.fp16,
+        bf16=bf16,
+        fp16=fp16,
         optim=args.optim,
         seed=args.seed,
         report_to=args.report_to,
@@ -213,7 +237,12 @@ def main():
     parser.add_argument("--save-total-limit", type=int, default=2)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--report-to", default="none")
-    parser.add_argument("--fp16", action="store_true")
+    parser.add_argument(
+        "--precision",
+        choices=("auto", "bf16", "fp16", "fp32"),
+        default="auto",
+        help="Training precision. auto uses bf16 when supported, otherwise fp16 on CUDA and fp32 on CPU.",
+    )
     parser.add_argument("--gradient-checkpointing", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--max-train-samples", type=int)
     parser.add_argument("--max-valid-samples", type=int)
@@ -269,6 +298,7 @@ def main():
     print(f"Train examples: {len(train_dataset)}")
     print(f"Valid examples: {len(valid_dataset)}")
     print(f"Output dir: {args.output_dir}")
+    print(f"Precision: {resolve_precision(args.precision)[2]}")
 
     training_args = make_training_arguments(args)
     trainer = create_trainer(model, tokenizer, train_dataset, valid_dataset, training_args, args)
