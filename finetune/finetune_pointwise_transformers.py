@@ -1,4 +1,5 @@
 import argparse
+import os
 import random
 import sys
 from pathlib import Path
@@ -226,6 +227,14 @@ def build_data_collator(tokenizer):
 
 def load_model_and_tokenizer(args):
     torch_dtype, _, _, precision_name = resolve_precision(args.precision)
+    local_rank = os.environ.get("LOCAL_RANK")
+    if local_rank is None:
+        device_map = "auto"
+    else:
+        local_rank = int(local_rank)
+        if torch.cuda.is_available():
+            torch.cuda.set_device(local_rank)
+        device_map = {"": local_rank}
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     if tokenizer.pad_token is None:
@@ -244,7 +253,7 @@ def load_model_and_tokenizer(args):
         args.model_name,
         torch_dtype=torch_dtype,
         quantization_config=quantization_config,
-        device_map="auto",
+        device_map=device_map,
         trust_remote_code=True,
     )
 
@@ -381,6 +390,9 @@ def main():
     print(f"Valid examples: {len(valid_dataset) if valid_dataset is not None else 0}")
     print(f"Output dir: {args.output_dir}")
     print(f"Precision: {precision_name}")
+    if "LOCAL_RANK" in os.environ:
+        print(f"Local rank: {os.environ['LOCAL_RANK']}")
+        print(f"Device map: {{'': {os.environ['LOCAL_RANK']}}}")
     if torch.cuda.is_available():
         major, minor = torch.cuda.get_device_capability()
         print(f"GPU capability: {major}.{minor}")
@@ -397,7 +409,8 @@ def main():
 
     trainer.train()
     trainer.save_model(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
+    if trainer.is_world_process_zero():
+        tokenizer.save_pretrained(args.output_dir)
 
 
 if __name__ == "__main__":
