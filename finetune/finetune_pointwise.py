@@ -1,4 +1,5 @@
 import argparse
+import os
 import random
 import sys
 from pathlib import Path
@@ -250,12 +251,21 @@ def main():
     parser.add_argument("--save-merged-16bit", action="store_true")
     args = parser.parse_args()
     args.output_dir = prepare_output_dir(args.output_dir)
+    local_rank = os.environ.get("LOCAL_RANK")
+    if local_rank is None:
+        device_map = None
+    else:
+        local_rank = int(local_rank)
+        if torch.cuda.is_available():
+            torch.cuda.set_device(local_rank)
+        device_map = {"": local_rank}
 
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=args.model_name,
         max_seq_length=args.max_length,
         dtype=None,
         load_in_4bit=args.load_in_4bit,
+        device_map=device_map,
     )
 
     if tokenizer.pad_token is None:
@@ -299,6 +309,9 @@ def main():
     print(f"Valid examples: {len(valid_dataset)}")
     print(f"Output dir: {args.output_dir}")
     print(f"Precision: {resolve_precision(args.precision)[2]}")
+    if "LOCAL_RANK" in os.environ:
+        print(f"Local rank: {os.environ['LOCAL_RANK']}")
+        print(f"Device map: {{'': {os.environ['LOCAL_RANK']}}}")
 
     training_args = make_training_arguments(args)
     trainer = create_trainer(model, tokenizer, train_dataset, valid_dataset, training_args, args)
@@ -306,9 +319,10 @@ def main():
 
     trainer.train()
     trainer.save_model(args.output_dir)
-    tokenizer.save_pretrained(args.output_dir)
+    if trainer.is_world_process_zero():
+        tokenizer.save_pretrained(args.output_dir)
 
-    if args.save_merged_16bit:
+    if args.save_merged_16bit and trainer.is_world_process_zero():
         model.save_pretrained_merged(
             str(Path(args.output_dir) / "merged_16bit"),
             tokenizer,
