@@ -6,6 +6,7 @@ numpy
 scipy
 scikit-learn
 torch
+torchao>=0.16.0
 transformers>=4.57.0,<5.0.0
 trl>=0.23.0
 peft>=0.19.0
