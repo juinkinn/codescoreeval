@@ -216,6 +216,7 @@ def main():
 
     parser.add_argument("--max-length", type=int, default=4096)
     parser.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--load-in-8bit", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.05)
@@ -252,6 +253,9 @@ def main():
     parser.add_argument("--save-merged-16bit", action="store_true")
     args = parser.parse_args()
     args.output_dir = prepare_output_dir(args.output_dir)
+    if args.load_in_4bit and args.load_in_8bit:
+        raise ValueError("Use only one of --load-in-4bit or --load-in-8bit")
+
     local_rank = os.environ.get("LOCAL_RANK")
     if local_rank is None:
         device_map = None
@@ -266,6 +270,7 @@ def main():
         max_seq_length=args.max_length,
         dtype=None,
         load_in_4bit=args.load_in_4bit,
+        load_in_8bit=args.load_in_8bit,
         device_map=device_map,
     )
 
