@@ -49,10 +49,21 @@ def prepare_output_dir(output_dir):
     return str(path)
 
 
+def cuda_has_native_bf16():
+    if not torch.cuda.is_available():
+        return False
+
+    try:
+        return torch.cuda.is_bf16_supported(including_emulation=False)
+    except TypeError:
+        major, _ = torch.cuda.get_device_capability()
+        return major >= 8
+
+
 def resolve_precision(precision):
     if precision == "bf16":
-        if not torch.cuda.is_available() or not torch.cuda.is_bf16_supported():
-            raise ValueError("bf16 requested, but this GPU does not support bf16")
+        if not cuda_has_native_bf16():
+            raise ValueError("bf16 requested, but this GPU does not have native bf16 support")
         return torch.bfloat16, True, False, "bf16"
 
     if precision == "fp16":
@@ -61,7 +72,7 @@ def resolve_precision(precision):
     if precision == "fp32":
         return torch.float32, False, False, "fp32"
 
-    if torch.cuda.is_available() and torch.cuda.is_bf16_supported():
+    if cuda_has_native_bf16():
         return torch.bfloat16, True, False, "bf16"
 
     if torch.cuda.is_available():
@@ -370,6 +381,10 @@ def main():
     print(f"Valid examples: {len(valid_dataset) if valid_dataset is not None else 0}")
     print(f"Output dir: {args.output_dir}")
     print(f"Precision: {precision_name}")
+    if torch.cuda.is_available():
+        major, minor = torch.cuda.get_device_capability()
+        print(f"GPU capability: {major}.{minor}")
+        print(f"Native bf16 support: {cuda_has_native_bf16()}")
     print(f"Overlength policy: {args.overlength_policy}")
 
     trainer = Trainer(
