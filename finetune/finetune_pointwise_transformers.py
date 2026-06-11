@@ -270,14 +270,15 @@ def load_model_and_tokenizer(args):
 
     if args.gradient_checkpointing:
         model.config.use_cache = False
-        if not (args.load_in_4bit or args.load_in_8bit):
-            if hasattr(model, "enable_input_require_grads"):
-                model.enable_input_require_grads()
-            else:
-                def make_inputs_require_grad(_module, _inputs, output):
-                    output.requires_grad_(True)
 
-                model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
+    if args.gradient_checkpointing and not (args.load_in_4bit or args.load_in_8bit):
+        if hasattr(model, "enable_input_require_grads"):
+            model.enable_input_require_grads()
+        else:
+            def make_inputs_require_grad(_module, _inputs, output):
+                output.requires_grad_(True)
+
+            model.get_input_embeddings().register_forward_hook(make_inputs_require_grad)
 
     lora_config = LoraConfig(
         r=args.lora_r,
