@@ -241,6 +241,9 @@ def load_model_and_tokenizer(args):
         tokenizer.pad_token = tokenizer.eos_token
 
     quantization_config = None
+    if args.load_in_4bit and args.load_in_8bit:
+        raise ValueError("Use only one of --load-in-4bit or --load-in-8bit")
+
     if args.load_in_4bit:
         quantization_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -248,6 +251,8 @@ def load_model_and_tokenizer(args):
             bnb_4bit_compute_dtype=torch_dtype,
             bnb_4bit_use_double_quant=True,
         )
+    elif args.load_in_8bit:
+        quantization_config = BitsAndBytesConfig(load_in_8bit=True)
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
@@ -257,7 +262,7 @@ def load_model_and_tokenizer(args):
         trust_remote_code=True,
     )
 
-    if args.load_in_4bit:
+    if args.load_in_4bit or args.load_in_8bit:
         model = prepare_model_for_kbit_training(
             model,
             use_gradient_checkpointing=args.gradient_checkpointing,
@@ -321,6 +326,7 @@ def main():
     parser.add_argument("--max-length", type=int, default=4096)
     parser.add_argument("--overlength-policy", choices=("skip", "truncate_prompt"), default="skip")
     parser.add_argument("--load-in-4bit", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--load-in-8bit", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=32)
     parser.add_argument("--lora-dropout", type=float, default=0.05)
