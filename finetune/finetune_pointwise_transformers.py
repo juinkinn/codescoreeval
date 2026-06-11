@@ -299,6 +299,7 @@ def make_training_arguments(args):
         save_steps=args.save_steps,
         save_total_limit=args.save_total_limit,
         gradient_checkpointing=args.gradient_checkpointing,
+        ddp_find_unused_parameters=False,
         bf16=bf16,
         fp16=fp16,
         optim=args.optim,
