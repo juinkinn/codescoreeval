@@ -6,6 +6,7 @@ from pathlib import Path
 import torch
 from datasets import Dataset
 from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from tqdm.auto import tqdm
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -102,8 +103,8 @@ def tokenize_messages(tokenizer, messages, max_length, overlength_policy):
         add_generation_prompt=False,
     )
 
-    prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
-    full_ids = tokenizer(full_text, add_special_tokens=False)["input_ids"]
+    prompt_ids = tokenizer(prompt_text, add_special_tokens=False, verbose=False)["input_ids"]
+    full_ids = tokenizer(full_text, add_special_tokens=False, verbose=False)["input_ids"]
 
     if len(prompt_ids) >= len(full_ids):
         return None, "empty_response"
@@ -139,6 +140,7 @@ def build_tokenized_examples(
     overlength_policy,
     max_samples=None,
     seed=42,
+    desc="Tokenizing examples",
 ):
     labels = load_jsonl(labels_path)
     submissions = load_map(submissions_path, "sub_id")
@@ -149,7 +151,7 @@ def build_tokenized_examples(
     skipped_overlength = 0
     skipped_empty_response = 0
 
-    for label in labels:
+    for label in tqdm(labels, desc=desc, unit="labels", dynamic_ncols=True):
         sub_id = label["sub_id"]
         problem_id = get_problem_id(label)
         submission = submissions.get(sub_id)
@@ -344,6 +346,7 @@ def main():
         args.overlength_policy,
         max_samples=args.max_train_samples,
         seed=args.seed,
+        desc="Tokenizing train labels",
     )
     valid_examples = build_tokenized_examples(
         args.valid_labels,
@@ -354,6 +357,7 @@ def main():
         args.overlength_policy,
         max_samples=args.max_valid_samples,
         seed=args.seed,
+        desc="Tokenizing valid labels",
     )
 
     if not train_examples:

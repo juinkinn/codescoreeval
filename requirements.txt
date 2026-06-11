@@ -1,5 +1,4 @@
 datasets>=4.5.0
-ipykernel>=7.1.0
 pandas>=2.3.3
 tqdm>=4.67.1
 numpy
