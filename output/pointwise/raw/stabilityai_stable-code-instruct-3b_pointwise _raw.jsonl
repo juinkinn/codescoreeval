@@ -1987,16 +1987,3 @@
 {"sub_id": "1553_I_i7", "gt_correctness_score": 1, "gt_efficiency_score": 5, "gt_readability_score": 3, "correctness_score": 3, "efficiency_score": 3, "readability_score": 4}
 {"sub_id": "1553_I_i8", "gt_correctness_score": 5, "gt_efficiency_score": 5, "gt_readability_score": 2, "correctness_score": 2, "efficiency_score": 1, "readability_score": null}
 {"sub_id": "1553_I_i9", "gt_correctness_score": 1, "gt_efficiency_score": 5, "gt_readability_score": 2, "correctness_score": 3, "efficiency_score": 5, "readability_score": 5}
-{"sub_id": "374_E_i3", "gt_correctness_score": 1, "gt_efficiency_score": 5, "gt_readability_score": 3, "correctness_score": null, "efficiency_score": 1, "readability_score": 2}
-{"sub_id": "414_C_c2", "gt_correctness_score": 5, "gt_efficiency_score": 5, "gt_readability_score": 4, "correctness_score": 4, "efficiency_score": 4, "readability_score": null}
-{"sub_id": "490_C_i1", "gt_correctness_score": 2, "gt_efficiency_score": 1, "gt_readability_score": 2, "correctness_score": 3, "efficiency_score": 3, "readability_score": 4}
-{"sub_id": "580_D_i7", "gt_correctness_score": 1, "gt_efficiency_score": 5, "gt_readability_score": 3, "correctness_score": 3, "efficiency_score": 2, "readability_score": 4}
-{"sub_id": "818_E_i1", "gt_correctness_score": 1, "gt_efficiency_score": 1, "gt_readability_score": 2, "correctness_score": 3, "efficiency_score": null, "readability_score": 3}
-{"sub_id": "p00184_c8", "gt_correctness_score": 5, "gt_efficiency_score": 5, "gt_readability_score": 3, "correctness_score": 3, "efficiency_score": 3, "readability_score": 4}
-{"sub_id": "p00742_c3", "gt_correctness_score": 5, "gt_efficiency_score": 5, "gt_readability_score": 3, "correctness_score": 2, "efficiency_score": 2, "readability_score": 2}
-{"sub_id": "p02133_i4", "gt_correctness_score": 3, "gt_efficiency_score": 5, "gt_readability_score": 3, "correctness_score": 3, "efficiency_score": 3, "readability_score": 2}
-{"sub_id": "p02274_c3", "gt_correctness_score": 5, "gt_efficiency_score": 5, "gt_readability_score": 3, "correctness_score": 4, "efficiency_score": 4, "readability_score": 2}
-{"sub_id": "p02409_c4", "gt_correctness_score": 5, "gt_efficiency_score": 5, "gt_readability_score": 4, "correctness_score": 2, "efficiency_score": 3, "readability_score": 3}
-{"sub_id": "p02791_i0", "gt_correctness_score": 1, "gt_efficiency_score": 2, "gt_readability_score": 2, "correctness_score": 2, "efficiency_score": 2, "readability_score": 3}
-{"sub_id": "p02892_i1", "gt_correctness_score": 5, "gt_efficiency_score": 5, "gt_readability_score": 4, "correctness_score": 3, "efficiency_score": 3, "readability_score": 3}
-{"sub_id": "p02971_c3", "gt_correctness_score": 5, "gt_efficiency_score": 5, "gt_readability_score": 3, "correctness_score": null, "efficiency_score": 3, "readability_score": 4}
