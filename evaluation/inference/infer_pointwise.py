@@ -42,9 +42,36 @@ def build_prompts(submission):
     desc = submission.get("description", "")
 
     return {
-        "correctness": CORRECTNESS_PROMPT.format(code=code, lang=lang, description=desc),
-        "efficiency": EFFICIENCY_PROMPT.format(code=code, lang=lang, description=desc),
-        "readability": SYNTAX_PROMPT.format(code=code, lang=lang, description=desc),
+        "correctness": [
+            {
+                "role": "user",
+                "content": CORRECTNESS_PROMPT.format(
+                    code=code,
+                    lang=lang,
+                    description=desc,
+                ),
+            }
+        ],
+        "efficiency": [
+            {
+                "role": "user",
+                "content": EFFICIENCY_PROMPT.format(
+                    code=code,
+                    lang=lang,
+                    description=desc,
+                ),
+            }
+        ],
+        "readability": [
+            {
+                "role": "user",
+                "content": SYNTAX_PROMPT.format(
+                    code=code,
+                    lang=lang,
+                    description=desc,
+                ),
+            }
+        ],
     }
 
 
