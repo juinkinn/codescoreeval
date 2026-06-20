@@ -20,11 +20,17 @@ from transformers import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
 
+from evaluation.inference.prompts import CORRECTNESS_PROMPT, EFFICIENCY_PROMPT, SYNTAX_PROMPT
 from evaluation.utils import load_jsonl
-from finetune.prompt import POINTWISE_PROMPTS
 
 
 CRITERIA = ("correctness", "efficiency", "readability")
+
+POINTWISE_PROMPTS = {
+    "correctness": CORRECTNESS_PROMPT,
+    "efficiency": EFFICIENCY_PROMPT,
+    "readability": SYNTAX_PROMPT,
+}
 
 
 def load_map(path, key):
@@ -88,15 +94,13 @@ def build_messages(criterion, label, submission, metadata):
     description = metadata.get("description", "")
     score = str(label[f"{criterion}_score"])
 
-    system_prompt, user_prompt = POINTWISE_PROMPTS[criterion]
-    user_prompt = user_prompt.format(
+    user_prompt = POINTWISE_PROMPTS[criterion].format(
         code=code,
         lang=lang,
         description=description,
     ).strip()
 
     return [
-        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
         {"role": "assistant", "content": score},
     ]
