@@ -18,14 +18,17 @@ def build_prompts_tuning(submission):
 
     for criterion, (system_prompt, user_template) in POINTWISE_PROMPTS.items():
 
-        user_prompt = user_template.format(
-            code=code,
-            lang=lang,
-            description=desc
+        user_prompt = (
+            system_prompt.strip()
+            + "\n\n"
+            + user_template.format(
+                code=code,
+                lang=lang,
+                description=desc
+            ).strip()
         )
 
         messages = [
-            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
 
@@ -139,6 +142,8 @@ def infer_criteria(model, tokenizer, prompts, max_retry=3):
                 output_ids[0][inputs["input_ids"].shape[1]:],
                 skip_special_tokens=True,
             ).strip()
+
+            print(output)
 
             score = extract_score(output)
 
