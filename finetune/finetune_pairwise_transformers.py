@@ -21,11 +21,16 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.append(str(REPO_ROOT))
 
 from evaluation.utils import load_jsonl
-from finetune.prompt import PAIRWISE_PROMPTS
+from evaluation.inference.prompts import CORRECTNESS_PAIRWISE, EFFICIENCY_PAIRWISE, READABILITY_PAIRWISE
 
 
 CRITERIA = ("correctness", "efficiency", "readability")
 
+PAIRWISE_PROMPTS = {
+    "correctness": CORRECTNESS_PAIRWISE,
+    "efficiency": EFFICIENCY_PAIRWISE,
+    "readability": READABILITY_PAIRWISE,
+}
 
 def load_map(path, key):
     return {row[key]: row for row in load_jsonl(path)}
@@ -103,8 +108,7 @@ def build_messages(criterion, label, submission1, submission2, metadata):
     # Map numeric label (0, 0.5, 1) to response format (B, Both, A)
     score = map_label_to_response(label["label"])
 
-    system_prompt, user_prompt = PAIRWISE_PROMPTS[criterion]
-    user_prompt = user_prompt.format(
+    user_prompt = PAIRWISE_PROMPTS[criterion].format(
         code1=code1,
         code2=code2,
         lang1=lang1,
@@ -113,7 +117,6 @@ def build_messages(criterion, label, submission1, submission2, metadata):
     ).strip()
 
     return [
-        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_prompt},
         {"role": "assistant", "content": score},
     ]
