@@ -308,6 +308,7 @@ def make_training_arguments(args):
         gradient_accumulation_steps=args.gradient_accumulation_steps,
         learning_rate=args.learning_rate,
         num_train_epochs=args.epochs,
+        max_steps=args.max_steps,
         warmup_ratio=args.warmup_ratio,
         weight_decay=args.weight_decay,
         lr_scheduler_type=args.lr_scheduler_type,
@@ -349,6 +350,7 @@ def main():
     )
 
     parser.add_argument("--epochs", type=float, default=2.0)
+    parser.add_argument("--max-steps", type=int, default=-1)
     parser.add_argument("--batch-size", type=int, default=1)
     parser.add_argument("--eval-batch-size", type=int, default=1)
     parser.add_argument("--gradient-accumulation-steps", type=int, default=8)
