@@ -185,7 +185,7 @@ def main():
     parser.add_argument("--input", default="data/finetune/pointwise_train_labels.jsonl")
     parser.add_argument(
         "--output",
-        default="data/finetune/pointwise_train_labels_row_balanced_c5_4000_e5_6000.jsonl",
+        default="data/finetune/pointwise_train_labels_balanced.jsonl",
     )
     parser.add_argument("--target-correctness-5", type=int, default=4000)
     parser.add_argument("--target-efficiency-5", type=int, default=6000)
