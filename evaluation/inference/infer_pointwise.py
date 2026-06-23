@@ -5,95 +5,12 @@ import re
 from dataset import SubmissionDataset
 from loader import load_tokenizer, load_model
 from prompts import CORRECTNESS_PROMPT, EFFICIENCY_PROMPT, SYNTAX_PROMPT
-from tuning_prompts import POINTWISE_PROMPTS
 from tqdm import tqdm
 from collections import Counter
 import torch.nn.functional as F
 
-def debug_score_logits(model, tokenizer, inputs):
-    """
-    Print probability of score tokens 1-5
-    BEFORE generation.
-    """
-
-    with torch.no_grad():
-        outputs = model(**inputs)
-
-    logits = outputs.logits[:, -1, :]
-    probs = F.softmax(logits, dim=-1)
-
-    print("\n========== SCORE TOKEN DEBUG ==========")
-
-    candidates = []
-
-    for score in ["1", "2", "3", "4", "5"]:
-
-        token_ids = tokenizer.encode(
-            score,
-            add_special_tokens=False
-        )
-
-        if len(token_ids) != 1:
-            print(
-                f"[WARN] score='{score}' "
-                f"maps to multiple tokens: {token_ids}"
-            )
-            continue
-
-        token_id = token_ids[0]
-
-        candidates.append(
-            (
-                score,
-                token_id,
-                logits[0, token_id].item(),
-                probs[0, token_id].item(),
-            )
-        )
-
-    candidates.sort(
-        key=lambda x: x[3],
-        reverse=True
-    )
-
-    for score, token_id, logit, prob in candidates:
-        print(
-            f"score={score} "
-            f"token_id={token_id} "
-            f"logit={logit:.4f} "
-            f"prob={prob:.8f}"
-        )
-
-    print("=======================================\n")
 
 def build_prompts_tuning(submission):
-    code = submission["code"]
-    lang = submission.get("lang", "")
-    desc = submission.get("description", "")
-
-    prompts = {}
-
-    for criterion, (system_prompt, user_template) in POINTWISE_PROMPTS.items():
-
-        user_prompt = (
-            system_prompt.strip()
-            + "\n\n"
-            + user_template.format(
-                code=code,
-                lang=lang,
-                description=desc
-            ).strip()
-        )
-
-        messages = [
-            {"role": "user", "content": user_prompt},
-        ]
-
-        prompts[criterion] = messages
-
-    return prompts
-
-def build_prompts(submission):
     code = submission["code"]
     lang = submission.get("lang", "")
     desc = submission.get("description", "")
@@ -129,6 +46,17 @@ def build_prompts(submission):
                 ),
             }
         ],
+    }
+
+def build_prompts(submission):
+    code = submission["code"]
+    lang = submission.get("lang", "")
+    desc = submission.get("description", "")
+
+    return {
+        "correctness": CORRECTNESS_PROMPT.format(code=code, lang=lang, description=desc),
+        "efficiency": EFFICIENCY_PROMPT.format(code=code, lang=lang, description=desc),
+        "readability": SYNTAX_PROMPT.format(code=code, lang=lang, description=desc),
     }
 
 
@@ -210,12 +138,6 @@ def infer_criteria(model, tokenizer, prompts, max_retry=3):
                 text = prompt
 
             inputs = tokenizer(text, return_tensors="pt").to(model.device)
-
-            debug_score_logits(
-                model,
-                tokenizer,
-                inputs
-            )
 
             with torch.no_grad():
                 output_ids = model.generate(
