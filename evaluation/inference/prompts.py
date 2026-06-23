@@ -34,8 +34,12 @@ for ALL possible valid inputs of the problem.
 In other words, determine if the implementation would pass in every case,
 not just some example cases.
 
-Then evaluate the code on the scale from 1 to 5, based on your analysis,
-where 5 means the code would pass in all cases.
+Scoring (1-5):
+- 5: Fully correct
+- 4: Mostly correct
+- 3: Partially correct
+- 2: Mostly incorrect
+- 1: Incorrect
 
 Evaluate the correctness of the following code snippet:
 
@@ -70,9 +74,12 @@ If the code is incomplete, logically incorrect, or partially implemented:
 If the approach is unclear or cannot be inferred:
 - Assign a low score.
 
-Score on a scale from 1 to 5:
-1 = very poor algorithmic approach or unclear  
-5 = optimal algorithm (matches theoretical best known complexity)
+Scoring (1-5):
+- 5: Optimal
+- 4: Near-optimal
+- 3: Acceptable but suboptimal
+- 2: Inefficient
+- 1: Very poor or unclear
 
 Evaluate the efficiency of the following code snippet:
 
