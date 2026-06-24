@@ -43,6 +43,22 @@ def get_problem_id(label):
     return label["sub_id"].rsplit("_", 1)[0]
 
 
+def get_label_criteria(label):
+    if "criterion" in label:
+        criterion = label["criterion"]
+        if criterion not in CRITERIA:
+            return ()
+        return (criterion,)
+
+    return CRITERIA
+
+
+def get_label_score(label, criterion):
+    if "score" in label:
+        return label["score"]
+    return label[f"{criterion}_score"]
+
+
 def parse_target_modules(value):
     return [module.strip() for module in value.split(",") if module.strip()]
 
@@ -92,7 +108,7 @@ def build_messages(criterion, label, submission, metadata):
     lang = submission.get("lang", "")
     code = submission.get("code", "")
     description = metadata.get("description", "")
-    score = str(label[f"{criterion}_score"])
+    score = str(get_label_score(label, criterion))
 
     user_prompt = POINTWISE_PROMPTS[criterion].format(
         code=code,
@@ -166,6 +182,7 @@ def build_tokenized_examples(
     skipped_missing = 0
     skipped_overlength = 0
     skipped_empty_response = 0
+    skipped_invalid = 0
 
     for label in tqdm(labels, desc=desc, unit="labels", dynamic_ncols=True):
         sub_id = label["sub_id"]
@@ -177,7 +194,12 @@ def build_tokenized_examples(
             skipped_missing += 1
             continue
 
-        for criterion in CRITERIA:
+        criteria = get_label_criteria(label)
+        if not criteria:
+            skipped_invalid += 1
+            continue
+
+        for criterion in criteria:
             messages = build_messages(criterion, label, submission, meta)
             example, reason = tokenize_messages(tokenizer, messages, max_length, overlength_policy)
 
@@ -202,6 +224,8 @@ def build_tokenized_examples(
         print(f"[WARN] Skipped {skipped_overlength} examples over max_length={max_length}")
     if skipped_empty_response:
         print(f"[WARN] Skipped {skipped_empty_response} examples with empty assistant response")
+    if skipped_invalid:
+        print(f"[WARN] Skipped {skipped_invalid} labels with invalid criterion")
 
     return examples
 
