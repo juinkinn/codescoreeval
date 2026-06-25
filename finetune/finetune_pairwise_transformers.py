@@ -354,7 +354,7 @@ def make_training_arguments(args):
 def main():
     parser = argparse.ArgumentParser(description="Fine-tune a pairwise code-scoring model with Transformers + PEFT.")
     parser.add_argument("--model-name", default="Qwen/Qwen2.5-Coder-3B-Instruct")
-    parser.add_argument("--train-labels", default="data/finetune/pairwise_train_labels.jsonl")
+    parser.add_argument("--train-labels", default="data/finetune/pairwise_train_labels_balanced.jsonl")
     parser.add_argument("--valid-labels", default="data/finetune/pairwise_valid_labels.jsonl")
     parser.add_argument("--submissions", default="data/submissions.jsonl")
     parser.add_argument("--metadata", default="data/metadata.jsonl")
