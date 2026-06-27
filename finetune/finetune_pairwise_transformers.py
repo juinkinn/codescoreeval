@@ -321,6 +321,15 @@ def load_model_and_tokenizer(args):
 
     return model, tokenizer, precision_name
 
+def get_latest_checkpoint(output_dir):
+    output_dir = Path(output_dir)
+    checkpoints = sorted(
+        output_dir.glob("checkpoint-*"),
+        key=lambda p: int(p.name.split("-")[-1]),
+    )
+    if not checkpoints:
+        return None
+    return str(checkpoints[-1])
 
 def make_training_arguments(args):
     _, bf16, fp16, _ = resolve_precision(args.precision)
@@ -396,6 +405,12 @@ def main():
     parser.add_argument("--gradient-checkpointing", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--max-train-samples", type=int)
     parser.add_argument("--max-valid-samples", type=int)
+    parser.add_argument(
+        "--resume-from-checkpoint",
+        type=str,
+        default=None,
+        help="Path to checkpoint to resume training from.",
+    )
     args = parser.parse_args()
     args.output_dir = prepare_output_dir(args.output_dir)
 
@@ -450,8 +465,17 @@ def main():
         eval_dataset=valid_dataset,
         data_collator=build_data_collator(tokenizer),
     )
+    resume_checkpoint = args.resume_from_checkpoint
 
-    trainer.train()
+    if resume_checkpoint is None:
+        resume_checkpoint = get_latest_checkpoint(args.output_dir)
+
+    if resume_checkpoint:
+        print(f"Resuming from checkpoint: {resume_checkpoint}")
+    else:
+        print("Training from scratch.")
+
+    trainer.train(resume_from_checkpoint=resume_checkpoint)
     trainer.save_model(args.output_dir)
     if trainer.is_world_process_zero():
         tokenizer.save_pretrained(args.output_dir)
