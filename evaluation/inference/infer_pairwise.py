@@ -251,7 +251,7 @@ def main(model_name,
     use_tuning = adapter_path is not None
 
     os.makedirs("output", exist_ok=True)
-    suffix = "tuning" if adapter_path else "raw"
+    suffix = "_tuning" if adapter_path else "_raw"
     suffix += "_swapped" if swapped else ""
     output_file = os.path.join(
         "output",
