@@ -7,6 +7,46 @@ from loader import load_tokenizer, load_model
 from prompts import CORRECTNESS_PROMPT, EFFICIENCY_PROMPT, SYNTAX_PROMPT
 from tqdm import tqdm
 from collections import Counter
+import torch.nn.functional as F
+
+
+def build_prompts_tuning(submission):
+    code = submission["code"]
+    lang = submission.get("lang", "")
+    desc = submission.get("description", "")
+
+    return {
+        "correctness": [
+            {
+                "role": "user",
+                "content": CORRECTNESS_PROMPT.format(
+                    code=code,
+                    lang=lang,
+                    description=desc,
+                ),
+            }
+        ],
+        "efficiency": [
+            {
+                "role": "user",
+                "content": EFFICIENCY_PROMPT.format(
+                    code=code,
+                    lang=lang,
+                    description=desc,
+                ),
+            }
+        ],
+        "readability": [
+            {
+                "role": "user",
+                "content": SYNTAX_PROMPT.format(
+                    code=code,
+                    lang=lang,
+                    description=desc,
+                ),
+            }
+        ],
+    }
 
 def build_prompts(submission):
     code = submission["code"]
@@ -84,11 +124,20 @@ def extract_score(text: str):
 def infer_criteria(model, tokenizer, prompts, max_retry=3):
     results = {}
 
-    for criterion, prompt_text in prompts.items():
+    for criterion, prompt in prompts.items():
         score = None
         for _ in range(max_retry):
 
-            inputs = tokenizer(prompt_text, return_tensors="pt").to(model.device)
+            if isinstance(prompt, list):
+                text = tokenizer.apply_chat_template(
+                    prompt,
+                    tokenize=False,
+                    add_generation_prompt=True
+                )
+            else:
+                text = prompt
+
+            inputs = tokenizer(text, return_tensors="pt").to(model.device)
 
             with torch.no_grad():
                 output_ids = model.generate(
@@ -106,6 +155,8 @@ def infer_criteria(model, tokenizer, prompts, max_retry=3):
                 skip_special_tokens=True,
             ).strip()
 
+            print(output)
+
             score = extract_score(output)
 
             if score is not None and 1 <= score <= 5:
@@ -121,20 +172,23 @@ def infer_criteria(model, tokenizer, prompts, max_retry=3):
 def main(
     model_name,
     use_bnb=False,
-    submissions_path="../../data/original_test.jsonl",
-    metadata_path="../../data/metadata.jsonl",
+    submissions_path="data/original_test.jsonl",
+    metadata_path="data/metadata.jsonl",
     limit=None,
+    adapter_path=None,
 ):
     dataset = SubmissionDataset(submissions_path, metadata_path, limit=limit)
     tokenizer = load_tokenizer(model_name)
-    model = load_model(model_name, use_bnb=use_bnb, device_map="cuda")
+    model = load_model(model_name, adapter_path=adapter_path, use_bnb=use_bnb, device_map="cuda")
 
     os.makedirs("output", exist_ok=True)
-    output_file = os.path.join("output", f"{model_name.replace('/', '_')}_pointwise.jsonl")
+    suffix = "tuning" if adapter_path else "raw"
+    output_file = os.path.join("output", f"{model_name.replace('/', '_')}_{suffix}.jsonl")
 
     with open(output_file, "w", encoding="utf-8") as f:
         for sub in tqdm(dataset, desc="Infer submissions", unit="sub"):
-            prompts = build_prompts(sub)
+            use_tuning = adapter_path is not None
+            prompts = build_prompts_tuning(sub) if use_tuning else build_prompts(sub)
             scores = infer_criteria(model, tokenizer, prompts)
             out = {
                 "sub_id": sub["sub_id"],
@@ -144,6 +198,7 @@ def main(
                 **scores,
             }
             f.write(json.dumps(out, ensure_ascii=False) + "\n")
+            f.flush()
 
     print(f"Inference done! Saved to {output_file}")
 
@@ -153,5 +208,6 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str, required=True)
     parser.add_argument("--use_bnb", action="store_true")
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--adapter_path", type=str, default=None)
     args = parser.parse_args()
-    main(args.model_name, args.use_bnb, limit=args.limit)
+    main(args.model_name, args.use_bnb, limit=args.limit, adapter_path=args.adapter_path)

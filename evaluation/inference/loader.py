@@ -1,7 +1,11 @@
 import os
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
-
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    BitsAndBytesConfig
+)
+from peft import PeftModel
 
 def _is_valid_local(path: str):
     return isinstance(path, str) and os.path.isdir(path)
@@ -24,7 +28,12 @@ def load_tokenizer(model_name: str):
     )
 
 
-def load_model(model_name: str, use_bnb: bool = False, device_map="cuda"):
+def load_model(
+    model_name: str,
+    adapter_path: str = None,
+    use_bnb: bool = False,
+    device_map="cuda"
+):
 
     kwargs = dict(
         device_map=device_map,
@@ -32,7 +41,6 @@ def load_model(model_name: str, use_bnb: bool = False, device_map="cuda"):
         torch_dtype=torch.float16,
     )
 
-    # 4bit quant
     if use_bnb:
         bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
@@ -42,17 +50,19 @@ def load_model(model_name: str, use_bnb: bool = False, device_map="cuda"):
         )
         kwargs["quantization_config"] = bnb_config
 
-    # LOCAL path
-    if _is_valid_local(model_name):
-        print(f"[Model] Loading LOCAL: {model_name}")
-        return AutoModelForCausalLM.from_pretrained(
-            model_name,
-            **kwargs
-        )
+    print(f"[Model] Loading base model: {model_name}")
 
-    # HF fallback
-    print(f"[Model] Loading HF: {model_name}")
-    return AutoModelForCausalLM.from_pretrained(
+    model = AutoModelForCausalLM.from_pretrained(
         model_name,
         **kwargs
     )
+
+    if adapter_path is not None:
+        print(f"[Model] Loading adapter: {adapter_path}")
+
+        model = PeftModel.from_pretrained(
+            model,
+            adapter_path
+        )
+
+    return model
