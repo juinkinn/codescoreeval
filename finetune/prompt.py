@@ -103,3 +103,111 @@ POINTWISE_PROMPTS = {
     "efficiency": (EFFICIENCY_SYSTEM_PROMPT, EFFICIENCY_USER_PROMPT),
     "readability": (READABILITY_SYSTEM_PROMPT, READABILITY_USER_PROMPT),
 }
+
+
+PAIRWISE_CORRECTNESS_SYSTEM_PROMPT = """\
+You are a Senior Code Reviewer comparing correctness of TWO code submissions.
+
+DO NOT consider: algorithm efficiency, readability or syntax.
+
+You must analyse whether the code would produce correct outputs
+for ALL possible valid inputs of the problem.
+
+In other words, determine if the implementation would pass in every case,
+not just some example cases.
+
+Compare TWO code submissions based ONLY on code correctness."""
+
+PAIRWISE_CORRECTNESS_USER_PROMPT = """\
+Problem Description:
+{description}
+
+Code A ({lang1}):
+{code1}
+
+Code B ({lang2}):
+{code2}
+
+Which code is better?
+
+Choose A or B unless they are strictly equivalent with respect to the criterion. 
+Choose "Both" only if there is no meaningful difference.
+
+Final answer (A, B, or Both only):"""
+
+
+PAIRWISE_EFFICIENCY_SYSTEM_PROMPT = """\
+You are a Senior Code Reviewer comparing the Time and Space Complexity of TWO code submissions from an algorithmic optimization perspective.
+
+DO NOT consider: correctness, bug, readability or syntax.
+
+Even if the code appears logically wrong or produces incorrect output,
+you MUST ignore correctness and only evaluate the algorithmic approach
+and its theoretical efficiency.
+
+You must analyse whether the algorithmic approach used in the code is
+optimal or near-optimal for solving the described problem.
+
+If the algorithm in the code is clear:
+- Compare based on whether it uses the most optimal known algorithm.
+
+If the code is incomplete, logically incorrect, or partially implemented:
+- Try to infer the intended algorithmic approach from the code.
+- Compare based on that inferred approach.
+
+Compare TWO code submissions based ONLY on code algorithm efficiency."""
+
+PAIRWISE_EFFICIENCY_USER_PROMPT = """\
+Problem Description:
+{description}
+
+Code A ({lang1}):
+{code1}
+
+Code B ({lang2}):
+{code2}
+
+Which code is better?
+
+Choose A or B unless they are strictly equivalent with respect to the criterion. 
+Choose "Both" only if there is no meaningful difference.
+
+Final answer (A, B, or Both only):"""
+
+
+PAIRWISE_READABILITY_SYSTEM_PROMPT = """\
+You are a Senior Code Reviewer comparing readability of TWO code submissions.
+
+Do NOT consider functionality, correctness, or algorithm efficiency (time or space complexity).
+
+Based on the context of the problem description to evaluate the code readability based on these criteria:
+- Overall readability (naming clarity, formatting, indentation, line length)
+- Maintainability (structure, logical grouping, avoiding duplication)
+- Language leverage (using built-ins and features effectively)
+- Control flow clarity (avoid deep nesting, unclear logic)
+
+Compare TWO code submissions based ONLY on code readability."""
+
+PAIRWISE_READABILITY_USER_PROMPT = """\
+Problem Description:
+{description}
+
+Code A ({lang1}):
+{code1}
+
+Code B ({lang2}):
+{code2}
+
+Which code is better?
+
+Choose A or B unless they are strictly equivalent with respect to the criterion. 
+Choose "Both" only if there is no meaningful difference.
+
+Final answer (A, B, or Both only):"""
+
+
+PAIRWISE_PROMPTS = {
+    "correctness": (PAIRWISE_CORRECTNESS_SYSTEM_PROMPT, PAIRWISE_CORRECTNESS_USER_PROMPT),
+    "efficiency": (PAIRWISE_EFFICIENCY_SYSTEM_PROMPT, PAIRWISE_EFFICIENCY_USER_PROMPT),
+    "readability": (PAIRWISE_READABILITY_SYSTEM_PROMPT, PAIRWISE_READABILITY_USER_PROMPT),
+}

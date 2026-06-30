@@ -30,26 +30,23 @@ def load_metadata(path):
 
 
 # ===== build prompt =====
-def build_prompt(sample, sub_map, metadata_map, swapped=False):
+def build_prompts(sample, sub_map, metadata_map, swapped=False, chat_format=False):
     sub1 = sub_map[sample["sub_id_1"]]
     sub2 = sub_map[sample["sub_id_2"]]
 
     base_id = sample["sub_id_1"].rsplit("_", 1)[0]
     description = metadata_map.get(base_id, "")
 
-    # default order
     code1 = sub1.get("code", "")
     code2 = sub2.get("code", "")
 
     lang1 = sub1.get("lang", "")
     lang2 = sub2.get("lang", "")
 
-    # swap if needed
     if swapped:
         code1, code2 = code2, code1
         lang1, lang2 = lang2, lang1
 
-    # Select prompt template based on criterion
     criterion = sample["criteria"]
 
     if criterion == "correctness":
@@ -61,7 +58,7 @@ def build_prompt(sample, sub_map, metadata_map, swapped=False):
     else:
         prompt_template = READABILITY_PAIRWISE
 
-    return prompt_template.format(
+    prompt = prompt_template.format(
         description=description,
         code1=code1,
         code2=code2,
@@ -69,6 +66,17 @@ def build_prompt(sample, sub_map, metadata_map, swapped=False):
         lang2=lang2
     )
 
+    if not chat_format:
+        return prompt
+
+    messages = []
+
+    messages.append({
+        "role": "user",
+        "content": prompt
+    })
+
+    return messages
 
 # ===== extract prediction =====
 def extract_choice(text: str):
@@ -129,7 +137,16 @@ def load_completed_ids(output_file):
 # ===== infer =====
 def infer(model, tokenizer, prompt, max_retry=2):
     for _ in range(max_retry):
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+        if isinstance(prompt, list):
+            text = tokenizer.apply_chat_template(
+                prompt,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+        else:
+            text = prompt
+
+        inputs = tokenizer(text, return_tensors="pt").to(model.device)
 
         with torch.no_grad():
             output_ids = model.generate(
@@ -212,7 +229,8 @@ def main(model_name,
          metadata_path="data/metadata.jsonl",
          use_bnb=False,
          swapped=False,
-         limit=None):
+         limit=None,
+         adapter_path=None):
 
     # convert HF name -> local path if exists
     resolved_model_path = resolve_model_path(model_name, MODEL_PATHS)
@@ -224,14 +242,17 @@ def main(model_name,
     model = load_model(
         resolved_model_path,
         use_bnb=use_bnb,
-        device_map="cuda"
+        device_map="cuda",
+        adapter_path=adapter_path
     )
 
     sub_map = load_submissions(submissions_path)
     metadata_map = load_metadata(metadata_path)
+    use_tuning = adapter_path is not None
 
     os.makedirs("output", exist_ok=True)
-    suffix = "_swapped" if swapped else ""
+    suffix = "_tuning" if adapter_path else "_raw"
+    suffix += "_swapped" if swapped else ""
     output_file = os.path.join(
         "output",
         f"{model_name.replace('/', '_')}_pairwise{suffix}.jsonl"
@@ -267,13 +288,7 @@ def main(model_name,
             if key in completed_ids:
                 continue
 
-            prompt = build_prompt(
-                sample,
-                sub_map,
-                metadata_map,
-                swapped=swapped
-            )
-
+            prompt = build_prompts(sample, sub_map, metadata_map, swapped=swapped, chat_format=use_tuning) 
             pred = infer(model, tokenizer, prompt)
 
             out = {
@@ -307,6 +322,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_bnb", action="store_true")
     parser.add_argument("--swapped", action="store_true")
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--adapter_path", type=str, default=None)
 
     args = parser.parse_args()
 
@@ -317,5 +333,6 @@ if __name__ == "__main__":
         metadata_path=args.metadata_path,
         use_bnb=args.use_bnb,
         swapped=args.swapped,
-        limit=args.limit
+        limit=args.limit,
+        adapter_path=args.adapter_path
     )
