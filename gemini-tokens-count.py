@@ -58,7 +58,6 @@ async def count_all_tokens(prompts):
     token_counts = await tqdm_asyncio.gather(*tasks, desc="Counting tokens")
     return token_counts
 
-# Chạy
 if __name__ == "__main__":
     if args.type == "all":
         prompts_dict = {

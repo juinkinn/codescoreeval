@@ -35,7 +35,6 @@ class SubmissionDataset:
                     sub = json.loads(line)
                     sub_id = sub["sub_id"]
 
-                    # align with old matching logic
                     base_id = sub_id.rsplit("_", 1)[0]
 
                     meta = self.metadata_map.get(base_id, {})

@@ -8,7 +8,7 @@
 # Convert pointwise to pairwise ranking
 !python .\evaluation\pointwise_to_pairwise.py -i .\output\pointwise\processed -o .\output\pairwise\processed -m both
 # Pairwise ranking
-!python .\evaluation\metric_pairwise.py --pairwise_dir .\output\pairwise\processed\ --mode all
+!python .\evaluation\metric_pairwise_ranking.py --pairwise_dir .\output\pairwise\processed\ --mode all
 
 # II. Human set
 
@@ -19,4 +19,4 @@
 # Convert pointwise to pairwise ranking
 !python .\evaluation\pointwise_to_pairwise.py -i .\output\human_evaluation\pointwise\ -o .\output\human_evaluation\pairwise\ -m both
 # Pairwise ranking
-!python .\evaluation\metric_pairwise.py --pairwise_dir .\output\human_evaluation\pairwise\ --mode all
+!python .\evaluation\metric_pairwise_ranking.py --pairwise_dir .\output\human_evaluation\pairwise\ --mode all

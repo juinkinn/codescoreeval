@@ -135,7 +135,7 @@ def load_completed_ids(output_file):
     return completed
 
 # ===== infer =====
-def infer(model, tokenizer, prompt, max_retry=2):
+def infer(model, tokenizer, prompt, max_retry=3):
     for _ in range(max_retry):
         if isinstance(prompt, list):
             text = tokenizer.apply_chat_template(
