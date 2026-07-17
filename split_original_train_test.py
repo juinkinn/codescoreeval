@@ -24,7 +24,7 @@ def main():
     ])
     parser.add_argument("--train-out", default="data/original_train.jsonl")
     parser.add_argument("--test-out", default="data/original_test.jsonl")
-    parser.add_argument("--test-ratio", type=float, default=0.2)
+    parser.add_argument("--test-ratio", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
